@@ -1,0 +1,6 @@
+{
+  "name": "Interest-Driven Connection System",
+  "description": "Un prototipo interactivo para descubrir planes de actividades e interactuar con grupos de intereses comunes.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
