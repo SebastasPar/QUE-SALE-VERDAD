@@ -54,7 +54,7 @@ const formatSpanishDate = (dateStr: string) => {
 
 export const ActivityCardSkeleton: React.FC = () => {
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl bg-white shadow-sm border border-slate-100 animate-pulse">
+    <div className="w-full flex flex-col overflow-hidden rounded-xl bg-white shadow-sm border border-slate-100 animate-pulse">
       <div className="h-48 w-full bg-slate-200"></div>
       <div className="p-4 flex flex-col gap-3">
         <div className="h-6 w-3/4 bg-slate-200 rounded"></div>
@@ -161,7 +161,7 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
   return (
     <div 
       onClick={() => navigate(`/activity/${id}`)}
-      className="group flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-[#1E2025] shadow-xs border border-[#DDE1E5] dark:border-[#2A2D34] transition-all hover:shadow-md hover:border-[#008B8B]/40 dark:hover:border-[#14B8A6]/40 cursor-pointer"
+      className="w-full group flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-[#1E2025] shadow-xs border border-[#DDE1E5] dark:border-[#2A2D34] transition-all hover:shadow-md hover:border-[#008B8B]/40 dark:hover:border-[#14B8A6]/40 cursor-pointer"
     >
       <div className="relative h-48 w-full bg-[#EFEFF1] dark:bg-[#121316] overflow-hidden">
         {imageUrl && !imageError ? (
@@ -196,37 +196,37 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
         </div>
       </div>
 
-      <div className="p-4 flex flex-col gap-2.5">
+      <div className="p-4 flex flex-col gap-2.5 min-w-0">
         <div className="flex justify-between items-start gap-3">
-          <h3 className="text-base sm:text-lg font-bold text-[#1C1E21] dark:text-[#F3F4F6] leading-snug line-clamp-2">
+          <h3 className="text-base sm:text-lg font-bold text-[#1C1E21] dark:text-[#F3F4F6] leading-snug line-clamp-2 min-w-0">
             {title}
           </h3>
           <button 
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="text-[#65676B] dark:text-[#9CA3AF] hover:text-rose-500 transition-colors p-1"
+            className="text-[#65676B] dark:text-[#9CA3AF] hover:text-rose-500 transition-colors p-1 shrink-0"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
           </button>
         </div>
         
         {/* Chips row: Date & Distance & Price */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="w-full flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
           {date && (
-            <div className="flex items-center gap-1.5 text-xs font-bold text-[#008B8B] dark:text-[#14B8A6] bg-[#008B8B]/10 dark:bg-[#14B8A6]/10 border border-[#008B8B]/20 dark:border-[#14B8A6]/20 px-2 py-0.5 rounded-md capitalize">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-              <span>{formatSpanishDate(date)}</span>
+            <div className="max-w-full flex items-center gap-1.5 text-xs font-bold text-[#008B8B] dark:text-[#14B8A6] bg-[#008B8B]/10 dark:bg-[#14B8A6]/10 border border-[#008B8B]/20 dark:border-[#14B8A6]/20 px-2 py-0.5 rounded-md capitalize min-w-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+              <span className="truncate">{formatSpanishDate(date)}</span>
             </div>
           )}
 
           {distanceKm !== undefined && (
-            <div className="flex items-center gap-1 text-xs font-medium text-[#65676B] dark:text-[#9CA3AF] bg-[#EFEFF1] dark:bg-[#121316] px-2 py-0.5 rounded-md border border-[#DDE1E5] dark:border-[#2A2D34]">
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#65676B] dark:text-[#9CA3AF]"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            <div className="flex items-center gap-1 text-xs font-medium text-[#65676B] dark:text-[#9CA3AF] bg-[#EFEFF1] dark:bg-[#121316] px-2 py-0.5 rounded-md border border-[#DDE1E5] dark:border-[#2A2D34] shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#65676B] dark:text-[#9CA3AF] shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
               <span>{distanceKm} km</span>
             </div>
           )}
 
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md" title="Reserva de 20 SaleCoins (reembolsable si se cancela)">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md shrink-0" title="Reserva de 20 SaleCoins (reembolsable si se cancela)">
             <span>🪙</span>
             <span>20 monedas</span>
           </span>
@@ -238,7 +238,7 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#65676B] dark:text-[#9CA3AF]">
+        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#65676B] dark:text-[#9CA3AF] min-w-0">
            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
            <span className="truncate">{location} • {time}</span>
         </div>

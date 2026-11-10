@@ -211,18 +211,18 @@ export default function Feed() {
   }, [advancedFilters]);
 
   return (
-    <div className="pb-28 min-h-screen bg-[#EFEFF1] dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] transition-colors">
+    <div className="w-full pb-28 min-h-screen bg-[#EFEFF1] dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] transition-colors">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-white/95 dark:bg-[#1E2025]/95 backdrop-blur-md border-b border-[#DDE1E5] dark:border-[#2A2D34] px-4 py-3 shadow-2xs">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex justify-between items-center mb-2.5">
-            <h1 className="text-xl font-black text-[#1C1E21] dark:text-[#F3F4F6] tracking-tight flex items-center gap-2">
-              <span className="w-8 h-8 rounded-xl bg-[#008B8B]/10 dark:bg-[#14B8A6]/20 flex items-center justify-center text-[#008B8B] dark:text-[#14B8A6] font-bold text-base shadow-2xs">
+      <header className="w-full sticky top-0 z-20 bg-white/95 dark:bg-[#1E2025]/95 backdrop-blur-md border-b border-[#DDE1E5] dark:border-[#2A2D34] px-4 py-3 shadow-2xs">
+        <div className="w-full max-w-3xl mx-auto">
+          <div className="flex justify-between items-center gap-2 mb-2.5">
+            <h1 className="shrink-0 text-lg sm:text-xl font-black text-[#1C1E21] dark:text-[#F3F4F6] tracking-tight flex items-center gap-2">
+              <span className="w-8 h-8 rounded-xl bg-[#008B8B]/10 dark:bg-[#14B8A6]/20 flex items-center justify-center text-[#008B8B] dark:text-[#14B8A6] font-bold text-base shadow-2xs shrink-0">
                 ✨
               </span>
               ¿Qué Sale?
             </h1>
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {/* Theme toggle switch (Light/Dark Mode) */}
               <button
                 type="button"
@@ -237,7 +237,7 @@ export default function Feed() {
               <NotificationBell />
               <SaleCoinsBadge />
               <div 
-                className="w-9 h-9 rounded-full overflow-hidden bg-slate-200 dark:bg-[#121316] ring-2 ring-[#008B8B]/30 dark:ring-[#14B8A6]/40 cursor-pointer shadow-xs transition-transform hover:scale-105" 
+                className="w-9 h-9 shrink-0 rounded-full overflow-hidden bg-slate-200 dark:bg-[#121316] ring-2 ring-[#008B8B]/30 dark:ring-[#14B8A6]/40 cursor-pointer shadow-xs transition-transform hover:scale-105" 
                 onClick={() => navigate('/profile')}
                 title="Ver mi perfil"
               >
@@ -252,7 +252,7 @@ export default function Feed() {
           </div>
 
           {/* Search Bar with high contrast */}
-          <div className="relative">
+          <div className="relative w-full">
             <Search className="w-4 h-4 text-[#65676B] dark:text-[#9CA3AF] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -274,8 +274,8 @@ export default function Feed() {
       </header>
 
       {/* Categories & Filter Button Section */}
-      <div className="sticky top-[105px] z-10 bg-white/95 dark:bg-[#1E2025]/95 backdrop-blur-md border-b border-[#DDE1E5] dark:border-[#2A2D34] px-4 py-2.5 shadow-2xs">
-        <div className="max-w-3xl mx-auto space-y-2">
+      <div className="w-full sticky top-[105px] z-10 bg-white/95 dark:bg-[#1E2025]/95 backdrop-blur-md border-b border-[#DDE1E5] dark:border-[#2A2D34] px-4 py-2.5 shadow-2xs">
+        <div className="w-full max-w-3xl mx-auto space-y-2">
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
             {/* Advanced Filters Button */}
             <button
@@ -429,7 +429,7 @@ export default function Feed() {
       </div>
 
       {/* Main Feed Content */}
-      <div className="max-w-3xl mx-auto px-4 mt-4">
+      <div className="w-full max-w-3xl mx-auto px-4 mt-4">
         {/* Results summary header */}
         <div className="flex justify-between items-center mb-3 text-xs text-[#65676B] dark:text-[#9CA3AF] font-medium">
           <span>
@@ -447,17 +447,17 @@ export default function Feed() {
 
         {/* GPS Proximity Indicator Banner */}
         {isGeolocationEnabled && coordinates && (
-          <div className="mb-4 p-3 bg-white dark:bg-[#1E2025] border border-[#008B8B]/30 dark:border-[#14B8A6]/30 rounded-2xl flex items-center justify-between text-xs shadow-2xs">
-            <div className="flex items-center gap-2.5">
-              <span className="p-2 bg-[#008B8B]/10 dark:bg-[#14B8A6]/20 text-[#008B8B] dark:text-[#14B8A6] rounded-xl font-bold">
+          <div className="w-full mb-4 p-3 bg-white dark:bg-[#1E2025] border border-[#008B8B]/30 dark:border-[#14B8A6]/30 rounded-2xl flex items-center justify-between gap-2.5 text-xs shadow-2xs">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <span className="p-2 bg-[#008B8B]/10 dark:bg-[#14B8A6]/20 text-[#008B8B] dark:text-[#14B8A6] rounded-xl font-bold shrink-0">
                 <Navigation className="w-4 h-4" />
               </span>
-              <div>
-                <p className="font-bold text-[#1C1E21] dark:text-[#F3F4F6] flex items-center gap-1.5">
-                  <span>Ordenado por cercanía a tu ubicación GPS</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-[#1C1E21] dark:text-[#F3F4F6] flex items-center gap-1.5 leading-snug">
+                  <span className="truncate sm:whitespace-normal">Ordenado por cercanía a tu ubicación GPS</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 </p>
-                <p className="text-[11px] text-[#65676B] dark:text-[#9CA3AF]">
+                <p className="text-[11px] text-[#65676B] dark:text-[#9CA3AF] leading-snug mt-0.5">
                   Mostrando los planes más próximos a tu ubicación actual primero
                 </p>
               </div>
@@ -465,7 +465,7 @@ export default function Feed() {
             <button
               type="button"
               onClick={() => navigate('/profile/me')}
-              className="text-[11px] font-black text-[#FF5733] dark:text-[#FF6B4A] hover:underline shrink-0 ml-2 cursor-pointer"
+              className="text-[11px] font-black text-[#FF5733] dark:text-[#FF6B4A] hover:underline shrink-0 cursor-pointer"
             >
               Ajustes GPS
             </button>

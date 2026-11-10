@@ -26,7 +26,7 @@ export function SaleCoinsBadge({ className = '', showAddButton = true }: SaleCoi
         >
           <span className="text-sm">🪙</span>
           <span className="font-black text-[#1C1E21] dark:text-[#F3F4F6]">{balance}</span>
-          <span className="text-[11px] font-semibold text-[#65676B] dark:text-[#9CA3AF]">SaleCoins</span>
+          <span className="hidden sm:inline text-[11px] font-semibold text-[#65676B] dark:text-[#9CA3AF]">SaleCoins</span>
         </button>
 
         {/* Optional quick + recharge shortcut */}
