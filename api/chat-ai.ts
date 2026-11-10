@@ -100,7 +100,7 @@ Genera las respuestas inteligentes que sigan este diálogo de forma fluida.
     console.error("Error calling Gemini API:", err);
     return res.json({ replies: getOfflineReplies(req.body.planId, req.body.userMessage, req.body.planTitle, req.body.planDescription) });
   }
-});
+}
 
 // Offline backup responses
 function getOfflineReplies(planId: string, userMessage: string, planTitle: string = '', planDescription: string = '') {

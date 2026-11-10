@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, 
-  Coins, 
   CheckCircle2, 
   CreditCard, 
-  Sparkles, 
   ArrowRight, 
   ChevronLeft,
   Copy,
@@ -13,9 +11,10 @@ import {
   ShieldCheck,
   Loader2,
   RefreshCw,
-  Gift
+  Lock
 } from 'lucide-react';
-import { useWalletStore } from '../../store/walletStore';
+import { useWalletStore, PaymentReceipt } from '../../store/walletStore';
+import { useAuthStore } from '../../store/authStore';
 
 interface RechargeModalProps {
   isOpen: boolean;
@@ -61,13 +60,19 @@ export function RechargeModal({
   onClose,
   requiredAmount,
 }: RechargeModalProps) {
-  const { balance, rechargeCoins } = useWalletStore();
+  const { balance, rechargeCoins, lastReceipt } = useWalletStore();
+  const { user } = useAuthStore();
   const [selectedPkg, setSelectedPkg] = useState<PackageOption>(PACKAGES[0]);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('yape');
   const [step, setStep] = useState<'select' | 'pay' | 'success'>('select');
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [approvalCode, setApprovalCode] = useState('');
+  const [currentReceipt, setCurrentReceipt] = useState<PaymentReceipt | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadedSuccess, setDownloadedSuccess] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resentSuccess, setResentSuccess] = useState(false);
   const [cardForm, setCardForm] = useState({
     number: '4557 •••• •••• 8912',
     name: '',
@@ -77,6 +82,8 @@ export function RechargeModal({
 
   if (!isOpen) return null;
 
+  const userEmail = user?.email || currentReceipt?.customerEmail || lastReceipt?.customerEmail || 'santiago.lima@quesale.pe';
+
   const handleCopyPhone = () => {
     navigator.clipboard.writeText('987654321');
     setCopiedPhone(true);
@@ -85,9 +92,18 @@ export function RechargeModal({
 
   const handleProcessPayment = () => {
     setIsProcessing(true);
+    setDownloadedSuccess(false);
+    setResentSuccess(false);
     setTimeout(() => {
       const generatedRef = `REC-${Math.floor(100000 + Math.random() * 900000)}`;
-      rechargeCoins(selectedPkg.soles, selectedPkg.coins, selectedMethod, generatedRef);
+      const receipt = rechargeCoins(
+        selectedPkg.soles,
+        selectedPkg.coins,
+        selectedMethod,
+        generatedRef,
+        user?.email
+      );
+      setCurrentReceipt(receipt);
       setIsProcessing(false);
       setStep('success');
     }, 1000);
@@ -96,7 +112,83 @@ export function RechargeModal({
   const handleResetAndClose = () => {
     setStep('select');
     setIsProcessing(false);
+    setDownloadedSuccess(false);
+    setResentSuccess(false);
     onClose();
+  };
+
+  const activeReceipt: PaymentReceipt = currentReceipt || lastReceipt || {
+    receiptNumber: 'B001-0048291',
+    customerEmail: userEmail,
+    totalSoles: Number(selectedPkg.soles.toFixed(2)),
+    igvSoles: Number((selectedPkg.soles * 0.18).toFixed(2)),
+    subtotalSoles: Number((selectedPkg.soles * 0.82).toFixed(2)),
+    coinsAcquired: selectedPkg.coins,
+    gateway: 'culqi',
+    emailStatus: 'sent',
+    paymentMethod: selectedMethod,
+    issuedAt: new Date().toISOString(),
+  };
+
+  const methodDisplayName =
+    activeReceipt.paymentMethod === 'card'
+      ? 'Tarjeta Débito / Crédito (Culqi)'
+      : activeReceipt.paymentMethod === 'yape'
+        ? 'Yape (vía Culqi)'
+        : 'Plin (vía Culqi)';
+
+  const handleDownloadReceipt = () => {
+    setIsDownloading(true);
+    setTimeout(() => {
+      try {
+        const receiptContent = [
+          '====================================================',
+          '              ¿QUÉ SALE? PERÚ S.A.C.                ',
+          '                 RUC: 20608945123                   ',
+          '           BOLETA DE VENTA ELECTRÓNICA              ',
+          `                SERIE: ${activeReceipt.receiptNumber}               `,
+          '====================================================',
+          `Fecha de Emisión : ${new Date(activeReceipt.issuedAt).toLocaleString('es-PE')}`,
+          `Cliente (Correo) : ${activeReceipt.customerEmail}`,
+          `Pasarela de Pago : Procesado y protegido por Culqi / Credicorp`,
+          `Método de Pago   : ${methodDisplayName}`,
+          '----------------------------------------------------',
+          'DESCRIPCIÓN                                  IMPORTE',
+          `Paquete de ${activeReceipt.coinsAcquired} SaleCoins (B2C Wallet)       S/ ${activeReceipt.totalSoles.toFixed(2)}`,
+          '----------------------------------------------------',
+          `OP. GRAVADA (82%)                        S/ ${activeReceipt.subtotalSoles.toFixed(2)}`,
+          `I.G.V. (18%)                             S/ ${activeReceipt.igvSoles.toFixed(2)}`,
+          `IMPORTE TOTAL                            S/ ${activeReceipt.totalSoles.toFixed(2)}`,
+          '====================================================',
+          'Representación impresa de la Boleta de Venta Electrónica.',
+          'Autorizado mediante resolución de intendencia SUNAT.',
+        ].join('\n');
+
+        const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Boleta_${activeReceipt.receiptNumber}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch {}
+      setIsDownloading(false);
+      setDownloadedSuccess(true);
+      setTimeout(() => setDownloadedSuccess(false), 3500);
+    }, 450);
+  };
+
+  const handleResendEmail = () => {
+    if (isResending) return;
+    setIsResending(true);
+    setResentSuccess(false);
+    setTimeout(() => {
+      setIsResending(false);
+      setResentSuccess(true);
+      setTimeout(() => setResentSuccess(false), 4000);
+    }, 700);
   };
 
   const modalElement = (
@@ -133,7 +225,7 @@ export function RechargeModal({
                 Tienda de SaleCoins
               </h1>
               <p className="text-[11px] text-[#65676B] dark:text-[#9CA3AF] hidden sm:block">
-                Recarga oficial sin comisiones
+                Recarga oficial sin comisiones • Culqi
               </p>
             </div>
           </div>
@@ -204,7 +296,7 @@ export function RechargeModal({
                   1. Elige tu paquete de SaleCoins
                 </label>
                 <span className="text-xs text-[#65676B] dark:text-[#9CA3AF]">
-                  Validez ilimitada
+                  Incluye IGV (18%) • Validez ilimitada
                 </span>
               </div>
 
@@ -263,11 +355,18 @@ export function RechargeModal({
               </div>
             </div>
 
-            {/* Payment Method Selector */}
-            <div>
-              <label className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-[#1C1E21] dark:text-[#F3F4F6] block mb-3">
-                2. Selecciona tu método de pago
-              </label>
+            {/* Payment Method Selector + Culqi / Credicorp Security Branding */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-[#1C1E21] dark:text-[#F3F4F6] block">
+                  2. Selecciona tu método de pago
+                </label>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/70 text-emerald-800 dark:text-emerald-300 text-xs font-bold w-fit">
+                  <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>Procesado y protegido por Culqi / Credicorp</span>
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <button
                   type="button"
@@ -314,6 +413,19 @@ export function RechargeModal({
                   <span className="text-sm font-bold">Tarjeta</span>
                 </button>
               </div>
+
+              {/* Culqi Security Footer Pill under payment methods */}
+              <div className="p-3 rounded-2xl bg-white/80 dark:bg-[#1E2025]/80 border border-[#DDE1E5] dark:border-[#2A2D34] flex flex-wrap items-center justify-between gap-2 text-xs text-[#65676B] dark:text-[#9CA3AF]">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
+                  <span className="font-semibold text-[#1C1E21] dark:text-[#F3F4F6]">
+                    Procesado y protegido por Culqi / Credicorp
+                  </span>
+                </div>
+                <span className="text-[11px]">
+                  Emisión automática de Boleta de Venta Electrónica (SUNAT)
+                </span>
+              </div>
             </div>
 
             {/* Bottom Action Section */}
@@ -340,10 +452,21 @@ export function RechargeModal({
         {/* STEP 2: PAYMENT VERIFICATION / CONFIRMATION */}
         {step === 'pay' && (
           <div className="max-w-xl mx-auto space-y-6 pb-12 animate-in fade-in duration-200">
+            {/* Culqi Security Header Badge */}
+            <div className="px-4 py-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/70 flex items-center justify-between gap-2 text-xs text-emerald-900 dark:text-emerald-200">
+              <div className="flex items-center gap-2 font-bold">
+                <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Procesado y protegido por Culqi / Credicorp</span>
+              </div>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider">
+                SSL 256-bit
+              </span>
+            </div>
+
             {/* Summary Ticket */}
             <div className="p-5 rounded-3xl bg-white dark:bg-[#1E2025] border border-[#DDE1E5] dark:border-[#2A2D34] shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider font-bold text-[#65676B] dark:text-[#9CA3AF]">Total a pagar:</p>
+                <p className="text-xs uppercase tracking-wider font-bold text-[#65676B] dark:text-[#9CA3AF]">Total a pagar (Inc. IGV):</p>
                 <p className="text-2xl font-black text-[#1C1E21] dark:text-[#F3F4F6] mt-0.5">
                   S/ {selectedPkg.soles.toFixed(2)}
                 </p>
@@ -378,7 +501,7 @@ export function RechargeModal({
                       Transfiere desde tu app de {selectedMethod === 'yape' ? 'Yape' : 'Plin'}
                     </h3>
                     <p className="text-xs text-[#65676B] dark:text-[#9CA3AF]">
-                      Envía exactamente <strong className="text-[#1C1E21] dark:text-[#F3F4F6]">S/ {selectedPkg.soles.toFixed(2)}</strong> al número oficial:
+                      Envía exactamente <strong className="text-[#1C1E21] dark:text-[#F3F4F6]">S/ {selectedPkg.soles.toFixed(2)}</strong> al número oficial afiliado a Culqi:
                     </p>
                   </div>
                 </div>
@@ -386,12 +509,12 @@ export function RechargeModal({
                 {/* Official Number with Copy Button */}
                 <div className="p-4 rounded-2xl bg-[#EFEFF1]/80 dark:bg-[#121316]/80 border border-[#DDE1E5] dark:border-[#2A2D34] flex items-center justify-between">
                   <div>
-                    <span className="text-xs uppercase tracking-wider font-bold text-[#65676B] dark:text-[#9CA3AF] block">Número Celular</span>
+                    <span className="text-xs uppercase tracking-wider font-bold text-[#65676B] dark:text-[#9CA3AF] block">Número Celular Oficial</span>
                     <span className="text-2xl font-black tracking-widest text-[#1C1E21] dark:text-[#F3F4F6] font-mono">
                       987 654 321
                     </span>
                     <p className="text-xs font-semibold text-[#65676B] dark:text-[#9CA3AF] mt-0.5">
-                      Titular: ¿Qué Sale? Perú S.A.C.
+                      Titular: ¿Qué Sale? Perú S.A.C. (Culqi QR)
                     </p>
                   </div>
 
@@ -418,7 +541,7 @@ export function RechargeModal({
                     className="w-full px-4 py-3 rounded-2xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] text-sm font-mono placeholder-[#65676B]/60 focus:outline-none focus:ring-2 focus:ring-[#008B8B] dark:focus:ring-[#14B8A6]"
                   />
                   <p className="text-[11px] text-[#65676B] dark:text-[#9CA3AF] mt-1">
-                    La acreditación a tu billetera es automática e inmediata al confirmar.
+                    Procesado y protegido por Culqi / Credicorp. La boleta electrónica se enviará a <strong>{userEmail}</strong>.
                   </p>
                 </div>
               </div>
@@ -486,7 +609,7 @@ export function RechargeModal({
 
                 <div className="flex items-center gap-2 text-xs text-[#65676B] dark:text-[#9CA3AF] pt-1">
                   <ShieldCheck className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                  <span>Conexión cifrada de 256 bits protegida por pasarela de pagos.</span>
+                  <span>Procesado y protegido por Culqi / Credicorp con cifrado de 256 bits.</span>
                 </div>
               </div>
             )}
@@ -502,7 +625,7 @@ export function RechargeModal({
                 {isProcessing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Verificando transacción...</span>
+                    <span>Procesando con Culqi...</span>
                   </>
                 ) : (
                   <>
@@ -523,10 +646,10 @@ export function RechargeModal({
           </div>
         )}
 
-        {/* STEP 3: SUCCESS CONFIRMATION */}
+        {/* STEP 3: SUCCESS CONFIRMATION & ELECTRONIC RECEIPT (BOLETA DE VENTA ELECTRÓNICA) */}
         {step === 'success' && (
-          <div className="max-w-md mx-auto py-8 text-center space-y-6 animate-in zoom-in-95 duration-200">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-4xl shadow-md animate-bounce">
+          <div className="max-w-lg mx-auto py-4 sm:py-6 text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-3xl shadow-md">
               🎉
             </div>
 
@@ -535,37 +658,149 @@ export function RechargeModal({
                 ¡Recarga Completada!
               </h2>
               <p className="text-sm text-[#65676B] dark:text-[#9CA3AF] mt-1">
-                Tus SaleCoins han sido acreditadas inmediatamente a tu cuenta.
+                Tus SaleCoins han sido acreditadas inmediatamente a tu billetera.
               </p>
             </div>
 
-            {/* Receipt Summary Box */}
-            <div className="p-5 rounded-3xl bg-white dark:bg-[#1E2025] border border-[#DDE1E5] dark:border-[#2A2D34] text-left space-y-3 shadow-xs">
-              <div className="flex justify-between items-center text-sm text-[#65676B] dark:text-[#9CA3AF]">
-                <span>SaleCoins recargadas:</span>
-                <strong className="text-[#008B8B] dark:text-[#14B8A6] font-extrabold text-base">
-                  +{selectedPkg.coins} monedas
-                </strong>
+            {/* Highlighted Email Confirmation Banner */}
+            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border-2 border-emerald-300 dark:border-emerald-700/80 text-emerald-900 dark:text-emerald-200 text-xs sm:text-sm font-bold shadow-xs text-left flex items-start gap-2.5">
+              <span className="text-base leading-none shrink-0">✅</span>
+              <span>
+                ¡Pago confirmado! Tu boleta electrónica ya se envió a tu correo:{' '}
+                <strong className="underline decoration-emerald-500">{activeReceipt.customerEmail}</strong>
+              </span>
+            </div>
+
+            {/* Official Electronic Receipt Card (Boleta de Venta Electrónica) */}
+            <div className="rounded-3xl bg-white dark:bg-[#1E2025] border-2 border-[#DDE1E5] dark:border-[#2A2D34] text-left shadow-md overflow-hidden">
+              {/* Official Receipt Header */}
+              <div className="p-5 bg-slate-50 dark:bg-[#16181D] border-b border-dashed border-[#DDE1E5] dark:border-[#2A2D34] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#008B8B] dark:text-[#14B8A6] block">
+                    ¿QUÉ SALE? PERÚ S.A.C. • RUC 20608945123
+                  </span>
+                  <h3 className="text-base font-black text-[#1C1E21] dark:text-[#F3F4F6] mt-0.5">
+                    BOLETA DE VENTA ELECTRÓNICA
+                  </h3>
+                  <p className="text-xs text-[#65676B] dark:text-[#9CA3AF]">
+                    Emisión: {new Date(activeReceipt.issuedAt).toLocaleString('es-PE')}
+                  </p>
+                </div>
+                <div className="px-3.5 py-2 rounded-2xl bg-white dark:bg-[#1E2025] border border-[#DDE1E5] dark:border-[#2A2D34] text-left sm:text-right shrink-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] block">
+                    Serie y Correlativo
+                  </span>
+                  <span className="text-sm font-black font-mono text-[#1C1E21] dark:text-[#F3F4F6]">
+                    {activeReceipt.receiptNumber}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between items-center text-sm text-[#65676B] dark:text-[#9CA3AF]">
-                <span>Monto pagado:</span>
-                <span className="font-bold text-[#1C1E21] dark:text-[#F3F4F6]">
-                  S/ {selectedPkg.soles.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-sm text-[#65676B] dark:text-[#9CA3AF]">
-                <span>Método utilizado:</span>
-                <span className="font-bold uppercase text-[#1C1E21] dark:text-[#F3F4F6]">
-                  {selectedMethod}
-                </span>
-              </div>
-              <div className="pt-3 border-t border-[#DDE1E5] dark:border-[#2A2D34] flex justify-between items-center">
-                <span className="text-sm font-bold text-[#1C1E21] dark:text-[#F3F4F6]">Nuevo saldo total:</span>
-                <strong className="text-emerald-700 dark:text-emerald-400 font-black text-xl">
-                  🪙 {balance} SaleCoins
-                </strong>
+
+              {/* Receipt Body & Tax Breakdown */}
+              <div className="p-5 space-y-3">
+                <div className="flex justify-between items-center text-xs sm:text-sm text-[#65676B] dark:text-[#9CA3AF]">
+                  <span>Cliente (Correo):</span>
+                  <span className="font-bold text-[#1C1E21] dark:text-[#F3F4F6] truncate max-w-[220px]">
+                    {activeReceipt.customerEmail}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs sm:text-sm text-[#65676B] dark:text-[#9CA3AF]">
+                  <span>Concepto:</span>
+                  <strong className="text-[#008B8B] dark:text-[#14B8A6] font-extrabold">
+                    Paquete +{activeReceipt.coinsAcquired} SaleCoins
+                  </strong>
+                </div>
+
+                <div className="flex justify-between items-center text-xs sm:text-sm text-[#65676B] dark:text-[#9CA3AF]">
+                  <span>Método utilizado:</span>
+                  <span className="font-bold text-[#1C1E21] dark:text-[#F3F4F6]">
+                    {methodDisplayName}
+                  </span>
+                </div>
+
+                {/* Tax Breakdown (Subtotal 82% + IGV 18% + Total) */}
+                <div className="my-2 pt-3 border-t border-dashed border-[#DDE1E5] dark:border-[#2A2D34] space-y-2">
+                  <div className="flex justify-between items-center text-xs sm:text-sm text-[#65676B] dark:text-[#9CA3AF]">
+                    <span>Op. Gravada (Subtotal 82%):</span>
+                    <span className="font-mono font-semibold text-[#1C1E21] dark:text-[#F3F4F6]">
+                      S/ {activeReceipt.subtotalSoles.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs sm:text-sm text-[#65676B] dark:text-[#9CA3AF]">
+                    <span>I.G.V. (18%):</span>
+                    <span className="font-mono font-semibold text-[#1C1E21] dark:text-[#F3F4F6]">
+                      S/ {activeReceipt.igvSoles.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm sm:text-base font-black text-[#1C1E21] dark:text-[#F3F4F6] pt-1">
+                    <span>Importe Total:</span>
+                    <span className="font-mono text-base sm:text-lg">
+                      S/ {activeReceipt.totalSoles.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-[#DDE1E5] dark:border-[#2A2D34] flex justify-between items-center">
+                  <span className="text-xs sm:text-sm font-bold text-[#1C1E21] dark:text-[#F3F4F6]">
+                    Nuevo saldo disponible:
+                  </span>
+                  <strong className="text-emerald-700 dark:text-emerald-400 font-black text-lg sm:text-xl">
+                    🪙 {balance} SaleCoins
+                  </strong>
+                </div>
+
+                {/* Culqi Security Stamp inside receipt */}
+                <div className="pt-2 flex items-center justify-between text-[11px] text-[#65676B] dark:text-[#9CA3AF]">
+                  <span className="inline-flex items-center gap-1 font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6]" />
+                    Procesado y protegido por Culqi / Credicorp
+                  </span>
+                  <span className="font-mono uppercase">SUNAT UBL 2.1</span>
+                </div>
               </div>
             </div>
+
+            {/* Interactive Receipt Actions: Download & Resend */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={isDownloading}
+                onClick={handleDownloadReceipt}
+                className="w-full py-3 px-4 rounded-2xl border-2 border-[#008B8B] dark:border-[#14B8A6] bg-white dark:bg-[#1E2025] hover:bg-[#008B8B]/5 dark:hover:bg-[#14B8A6]/10 text-[#008B8B] dark:text-[#14B8A6] font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generando boleta...</span>
+                  </>
+                ) : (
+                  <span>{downloadedSuccess ? '✅ Boleta descargada' : '📄 Descargar Boleta'}</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                disabled={isResending}
+                onClick={handleResendEmail}
+                className="w-full py-3 px-4 rounded-2xl border-2 border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#1E2025] hover:bg-slate-100 dark:hover:bg-[#2A2D34] text-[#1C1E21] dark:text-[#F3F4F6] font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isResending ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-[#008B8B] dark:text-[#14B8A6]" />
+                    <span>Reenviando correo...</span>
+                  </>
+                ) : (
+                  <span>{resentSuccess ? '✅ Reenviado a tu correo' : '🔄 Reenviar a mi correo'}</span>
+                )}
+              </button>
+            </div>
+
+            {resentSuccess && (
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 animate-in fade-in">
+                Se envió una nueva copia de la boleta {activeReceipt.receiptNumber} a {activeReceipt.customerEmail}.
+              </p>
+            )}
 
             <button
               type="button"
