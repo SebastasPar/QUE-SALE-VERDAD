@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -720,22 +721,6 @@ export default async function handler(req: any, res: any) {
     const pdfBase64 = pdfBuffer.toString("base64");
     const filename = `Boleta_${templateParams.receiptNumber}.pdf`;
 
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      console.log("RESEND_API_KEY no configurada en el servidor; envío simulado para:", cleanEmail);
-      return res.status(200).json({
-        ok: true,
-        mode: "simulated",
-        filename,
-        pdfBase64,
-        message: "RESEND_API_KEY no configurada en el servidor; envío simulado con PDF generado.",
-      });
-    }
-
-    const resend = new Resend(apiKey);
-    const fromAddress =
-      process.env.RESEND_FROM_EMAIL || "¿Qué Sale? Perú <onboarding@resend.dev>";
-
     const subject =
       finalType === "venue"
         ? `Boleta de Suscripción ${templateParams.receiptNumber} (${templateParams.businessName}) - ¿Qué Sale?`
@@ -746,12 +731,83 @@ export default async function handler(req: any, res: any) {
         ? buildVenueReceiptHtml(templateParams)
         : buildUserReceiptHtml(templateParams);
 
+    const textBody = buildReceiptText(templateParams);
+
+    // Prioridad 1: Gmail SMTP (Gratis para enviar a cualquier correo sin dominio propio)
+    const gmailUser = process.env.GMAIL_USER?.trim();
+    const gmailPass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "");
+
+    if (gmailUser && gmailPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: "smtp.gmail.com",
+          port: 465,
+          secure: true,
+          auth: {
+            user: gmailUser,
+            pass: gmailPass,
+          },
+        });
+
+        const info = await transporter.sendMail({
+          from: `"¿Qué Sale? Perú" <${gmailUser}>`,
+          to: cleanEmail,
+          subject,
+          html,
+          text: textBody,
+          attachments: [
+            {
+              filename,
+              content: pdfBuffer,
+              contentType: "application/pdf",
+            },
+          ],
+        });
+
+        return res.status(200).json({
+          ok: true,
+          mode: "live",
+          provider: "gmail_smtp",
+          id: info.messageId,
+          filename,
+          pdfBase64,
+        });
+      } catch (gmailErr: any) {
+        console.error("Error enviando por Gmail SMTP:", gmailErr);
+        return res.status(200).json({
+          ok: false,
+          mode: "resend_error",
+          provider: "gmail_smtp",
+          filename,
+          pdfBase64,
+          error: gmailErr?.message || "Error al enviar el correo con Gmail SMTP.",
+        });
+      }
+    }
+
+    // Prioridad 2: Resend (Respaldo si está configurado y no se configuró Gmail SMTP)
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.log("Sin GMAIL_USER/GMAIL_APP_PASSWORD ni RESEND_API_KEY; envío simulado para:", cleanEmail);
+      return res.status(200).json({
+        ok: true,
+        mode: "simulated",
+        filename,
+        pdfBase64,
+        message: "Configura GMAIL_USER y GMAIL_APP_PASSWORD en Vercel para envío real a cualquier correo.",
+      });
+    }
+
+    const resend = new Resend(apiKey);
+    const fromAddress =
+      process.env.RESEND_FROM_EMAIL || "¿Qué Sale? Perú <onboarding@resend.dev>";
+
     const { data, error } = await resend.emails.send({
       from: fromAddress,
       to: [cleanEmail],
       subject,
       html,
-      text: buildReceiptText(templateParams),
+      text: textBody,
       attachments: [
         {
           filename,
@@ -765,6 +821,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({
         ok: false,
         mode: "resend_error",
+        provider: "resend",
         filename,
         pdfBase64,
         error: error.message || "Error al enviar el correo con Resend.",
@@ -774,6 +831,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       ok: true,
       mode: "live",
+      provider: "resend",
       id: data?.id,
       filename,
       pdfBase64,

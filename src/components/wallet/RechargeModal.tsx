@@ -767,10 +767,10 @@ export function RechargeModal({
               <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border-2 border-teal-300 dark:border-teal-700/80 text-teal-900 dark:text-teal-200 text-xs sm:text-sm font-semibold shadow-xs text-left flex items-start gap-2.5">
                 <span className="text-base leading-none shrink-0">📄</span>
                 <span>
-                  ¡Pago confirmado! Boleta emitida para{' '}
+                  ¡Pago confirmado! Boleta PDF emitida para{' '}
                   <strong className="underline decoration-teal-500">{activeReceipt.customerEmail}</strong>{' '}
                   <span className="text-xs font-normal opacity-85">
-                    (Modo demostración: configura <code className="font-mono">RESEND_API_KEY</code> en Vercel para despacho real).
+                    (Modo demostración: configura <code className="font-mono">GMAIL_USER</code> y <code className="font-mono">GMAIL_APP_PASSWORD</code> en Vercel para envío real a cualquier correo).
                   </span>
                 </span>
               </div>
@@ -778,7 +778,7 @@ export function RechargeModal({
               <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border-2 border-emerald-300 dark:border-emerald-700/80 text-emerald-900 dark:text-emerald-200 text-xs sm:text-sm font-bold shadow-xs text-left flex items-start gap-2.5">
                 <span className="text-base leading-none shrink-0">✅</span>
                 <span>
-                  ¡Pago confirmado! Tu boleta electrónica ya fue enviada vía Resend a{' '}
+                  ¡Pago confirmado! Tu boleta electrónica en PDF ya fue enviada a{' '}
                   <strong className="underline decoration-emerald-500">{activeReceipt.customerEmail}</strong>
                 </span>
               </div>
