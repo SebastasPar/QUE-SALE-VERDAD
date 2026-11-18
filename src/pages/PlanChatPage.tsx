@@ -50,8 +50,9 @@ const PlanChatPage: React.FC<PlanChatPageProps> = ({ planId }) => {
   const sendMessageMutation = useSendMessageMutation(planId);
   const { mutate: joinActivity, isPending: isJoining } = useJoinActivity();
 
-  // Route guarding for unjoined users, or let them unblock and join gracefully
+  // Route guarding for unjoined users, while allowing venue owners/hosts direct coordination access
   const isJoined = activity?.isJoined;
+  const hasAccess = Boolean(isJoined || user?.role === 'venue');
 
   // Mark notifications for this plan as read when opening chat
   useEffect(() => {
@@ -75,7 +76,7 @@ const PlanChatPage: React.FC<PlanChatPageProps> = ({ planId }) => {
   };
 
   const handleSendMessage = async (content: string) => {
-    if (!isJoined) return;
+    if (!hasAccess) return;
     await sendMessageMutation.mutateAsync({
       planId,
       content,
@@ -100,8 +101,8 @@ const PlanChatPage: React.FC<PlanChatPageProps> = ({ planId }) => {
     );
   }
 
-  // If user is validated but not member of that activity, show gorgeous join invitation card!
-  if (activity && !isJoined) {
+  // If user is validated but not member of that activity (and not a venue), show join invitation card
+  if (activity && !hasAccess) {
     return (
       <div className="flex flex-col h-[100dvh] bg-[#EFEFF1] dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] max-w-2xl mx-auto border-x border-[#DDE1E5] dark:border-[#2A2D34]" id="chat-unjoined-access">
         {/* Simple Header */}

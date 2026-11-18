@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sun, Moon, Sparkles, User, KeyRound } from 'lucide-react';
+import { Sun, Moon, Sparkles, User, KeyRound, Building2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { TermsAndConditionsModal } from '../components/shared/TermsAndConditionsModal';
@@ -50,6 +50,7 @@ export default function Landing() {
                 id: 'guest-fair',
                 name: 'Visitante Feria',
                 email: 'visitante@feriaplanes.com',
+                role: 'user',
                 avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
                 bio: 'Explorando ¿Qué Sale? en la feria de proyectos. ¡Listo para descubrir y sumarme a planes únicos!'
               }, true);
@@ -76,6 +77,14 @@ export default function Landing() {
           >
             <KeyRound className="w-5 h-5 text-[#65676B] dark:text-[#9CA3AF] shrink-0" />
             <span>Iniciar sesión</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/auth/login?role=venue')}
+            className="w-full py-3 px-5 rounded-2xl border border-[#008B8B]/30 dark:border-[#14B8A6]/30 bg-[#008B8B]/5 dark:bg-[#14B8A6]/10 text-[#008B8B] dark:text-[#14B8A6] font-extrabold text-xs sm:text-sm hover:bg-[#008B8B]/10 transition-colors flex justify-center items-center gap-2 cursor-pointer"
+          >
+            <Building2 className="w-4 h-4 shrink-0" />
+            <span>Acceso para Locales Aliados 🏢</span>
           </button>
         </div>
 

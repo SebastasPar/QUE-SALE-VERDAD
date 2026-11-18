@@ -28,6 +28,8 @@ export interface Activity {
   price?: number;
   priceType?: 'free' | 'paid';
   isCancelled?: boolean;
+  discountOffer?: string;
+  branchesCount?: number;
 }
 
 const DEFAULT_ACTIVITIES: Activity[] = [
@@ -432,6 +434,10 @@ const joinActivityApi = async (id: string): Promise<{ success: boolean; isJoined
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       const user = useAuthStore.getState().user;
+      if (user?.role === 'venue') {
+        reject(new Error('Los locales aliados solo crean y publican planes; no pueden unirse como integrantes ni ocupar cupos.'));
+        return;
+      }
       const userId = user?.id || 'demo-user-1';
       const joinedIds = getUserJoinedIds(userId);
       const currentlyJoined = joinedIds.includes(id);
@@ -551,22 +557,24 @@ export const cancelActivityApi = async (id: string): Promise<{ success: boolean 
       }
 
       // Automatic guarantee refund for attendees (always protected)
-      if (activity.isJoined) {
+      const currentUser = useAuthStore.getState().user;
+      const isVenueUser = currentUser?.role === 'venue';
+
+      if (!isVenueUser && activity.isJoined) {
         wallet.refundCoins(
           20,
           'Reembolso por cancelación de salida (Garantía)',
           `Garantía de reembolso: La salida "${activity.title}" fue cancelada. Tus 20 SaleCoins están de vuelta.`,
           activity.id
         );
-        const user = useAuthStore.getState().user;
-        if (user?.id) {
-          const joined = getUserJoinedIds(user.id);
-          setUserJoinedIds(user.id, joined.filter((actId) => actId !== id));
+        if (currentUser?.id) {
+          const joined = getUserJoinedIds(currentUser.id);
+          setUserJoinedIds(currentUser.id, joined.filter((actId) => actId !== id));
         }
       }
 
-      // If user was creator (new- activity), refund only if cancelled with > 48h notice
-      if (id.startsWith('new-')) {
+      // If user (not venue) was creator (new- activity), refund only if cancelled with > 48h notice
+      if (!isVenueUser && id.startsWith('new-') && activity.organizerType !== 'venue') {
         if (!isLateCancellation) {
           wallet.refundCoins(
             30,

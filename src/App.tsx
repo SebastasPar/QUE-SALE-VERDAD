@@ -22,6 +22,7 @@ import Profile from './pages/Profile';
 import PlanChatPage from './pages/PlanChatPage';
 import Chats from './pages/Chats';
 import RechargePage from './pages/RechargePage';
+import VenueDashboard from './pages/VenueDashboard';
 
 // Notifications
 import { NotificationToast } from './components/notifications/NotificationToast';
@@ -78,6 +79,7 @@ export default function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/:userId" element={<Profile />} />
             <Route path="/recharge" element={<RechargePage />} />
+            <Route path="/venue/dashboard" element={<VenueDashboard />} />
           </Routes>
         </AppInitializer>
       </BrowserRouter>

@@ -33,6 +33,13 @@ import {
   Navigation,
   MapPin,
   LocateFixed,
+  Building2,
+  Store,
+  CreditCard,
+  Download,
+  RefreshCw,
+  FileText,
+  Phone,
 } from 'lucide-react';
 import { useWalletStore } from '../store/walletStore';
 import { useLocationStore } from '../store/locationStore';
@@ -45,10 +52,12 @@ export default function Profile() {
   const { userId } = useParams<{ userId?: string }>();
   const navigate = useNavigate();
   
-  const { user: currentUser, logout, updateProfile } = useAuthStore();
+  const { user: currentUser, logout, updateProfile, updateSubscription, updateVenueDetails } = useAuthStore();
   const { isDarkMode, toggleDarkMode } = useThemeStore();
   const { balance, transactions } = useWalletStore();
   const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isRenewingSub, setIsRenewingSub] = useState(false);
+  const [receiptDownloaded, setReceiptDownloaded] = useState(false);
   const { 
     isGeolocationEnabled, 
     status: geoStatus, 
@@ -60,6 +69,10 @@ export default function Profile() {
   // Custom hook extracts profile dynamically (Static profiles block for hosts, fallback to me)
   const profile = useUserProfile(userId);
   const isOwnProfile = !userId || userId === 'me' || (currentUser && userId === currentUser.id);
+  const isVenue = Boolean(isOwnProfile && currentUser?.role === 'venue');
+  const venueDetails = currentUser?.venueDetails;
+  const subscription = currentUser?.subscription;
+  const isSubActive = subscription?.status === 'active';
 
   // Tabs layout
   const [activeTab, setActiveTab] = useState<'plans' | 'reviews' | 'interests' | 'wallet'>('plans');
@@ -72,22 +85,61 @@ export default function Profile() {
   const [editBio, setEditBio] = useState(currentUser?.bio || '');
   const [editAvatarUrl, setEditAvatarUrl] = useState(currentUser?.avatarUrl || '');
   const [editName, setEditName] = useState(currentUser?.name || '');
+  const [editBranchesCount, setEditBranchesCount] = useState<number>(currentUser?.venueDetails?.branchesCount || 1);
+  const [editAddress, setEditAddress] = useState(currentUser?.venueDetails?.address || '');
+  const [editPhone, setEditPhone] = useState(currentUser?.venueDetails?.phone || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenEditModal = () => {
     setEditBio(currentUser?.bio || profile?.bio || '');
     setEditAvatarUrl(currentUser?.avatarUrl || profile?.avatarUrl || '');
-    setEditName(currentUser?.name || profile?.name || '');
+    setEditName(currentUser?.venueDetails?.businessName || currentUser?.name || profile?.name || '');
+    setEditBranchesCount(currentUser?.venueDetails?.branchesCount || 1);
+    setEditAddress(currentUser?.venueDetails?.address || '');
+    setEditPhone(currentUser?.venueDetails?.phone || '');
     setIsEditingProfile(true);
   };
 
   const handleSaveProfile = () => {
+    const trimmedName = editName.trim() || currentUser?.name;
     updateProfile({
-      name: editName.trim() || currentUser?.name,
+      name: trimmedName,
       bio: editBio.trim(),
       avatarUrl: editAvatarUrl
     });
+    if (isVenue) {
+      updateVenueDetails({
+        businessName: trimmedName,
+        branchesCount: Math.max(1, Number(editBranchesCount) || 1),
+        address: editAddress.trim() || venueDetails?.address || 'Lima, Perú',
+        phone: editPhone.trim() || venueDetails?.phone || '999999999',
+      });
+    }
     setIsEditingProfile(false);
+  };
+
+  const handleRenewVenueSub = async (targetPlanId?: 'single' | 'multi') => {
+    setIsRenewingSub(true);
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    const planId = targetPlanId || subscription?.planId || ((venueDetails?.branchesCount || 1) > 1 ? 'multi' : 'single');
+    const isMulti = planId === 'multi';
+    const now = new Date();
+    const renewsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    updateSubscription({
+      status: 'active',
+      planId,
+      planName: isMulti ? 'Plan Multisede' : 'Plan Sede Única',
+      monthlyPricePen: isMulti ? 179 : 99,
+      activatedAt: now.toISOString(),
+      renewsAt: renewsAt.toISOString(),
+      receiptNumber: `B001-${String(Math.floor(100000 + Math.random() * 899999))}`,
+    });
+    setIsRenewingSub(false);
+  };
+
+  const handleDownloadVenueReceipt = () => {
+    setReceiptDownloaded(true);
+    setTimeout(() => setReceiptDownloaded(false), 3000);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,7 +242,9 @@ export default function Profile() {
         {/* Navigation / Actions Bar */}
         <div className="flex justify-between items-center mb-6">
           {isOwnProfile ? (
-            <h1 className="text-xl font-black text-[#1C1E21] dark:text-[#F3F4F6] tracking-tight">Mi Perfil</h1>
+            <h1 className="text-xl font-black text-[#1C1E21] dark:text-[#F3F4F6] tracking-tight">
+              {isVenue ? 'Mi Local Aliado' : 'Mi Perfil'}
+            </h1>
           ) : (
             <button 
               onClick={() => navigate(-1)}
@@ -246,11 +300,13 @@ export default function Profile() {
           <div className="flex-1 min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
               <div className="flex items-center gap-2 justify-center sm:justify-start flex-wrap">
-                <h2 className="text-2xl font-black text-[#1C1E21] dark:text-[#F3F4F6] leading-tight">{profile.name}</h2>
-                {profile.badge && (
+                <h2 className="text-2xl font-black text-[#1C1E21] dark:text-[#F3F4F6] leading-tight">
+                  {isVenue && venueDetails?.businessName ? venueDetails.businessName : profile.name}
+                </h2>
+                {(isVenue || profile.badge) && (
                   <span className="inline-flex self-center items-center gap-1 px-2.5 py-0.5 bg-[#008B8B]/10 dark:bg-[#14B8A6]/20 text-[#008B8B] dark:text-[#14B8A6] text-[10px] font-black rounded-md shadow-2xs uppercase shrink-0">
                     <Sparkles className="w-3 h-3 text-[#008B8B] dark:text-[#14B8A6]" />
-                    {profile.badge}
+                    {isVenue ? '🏢 Local Aliado Verificado' : profile.badge}
                   </span>
                 )}
               </div>
@@ -283,40 +339,141 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Dynamic Metric Grid with SaleCoins */}
-        <div className="grid grid-cols-3 gap-2.5 mt-6 pt-5 border-t border-[#DDE1E5] dark:border-[#2A2D34]">
-          <div className="bg-[#EFEFF1]/60 dark:bg-[#121316]/60 rounded-xl p-3 text-center border border-[#DDE1E5] dark:border-[#2A2D34]">
-            <p className="text-[10px] text-[#65676B] dark:text-[#9CA3AF] font-bold uppercase tracking-wider mb-1">Planes</p>
-            <div className="flex items-center justify-center gap-1">
-              <Calendar className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6]" />
-              <p className="text-md font-extrabold text-[#1C1E21] dark:text-[#F3F4F6]">{profile.activities.length}</p>
+        {/* Dynamic Metric Grid (SaleCoins for Persona vs Locales & Suscripción for Venue) */}
+        {isVenue ? (
+          <div className="grid grid-cols-3 gap-2.5 mt-6 pt-5 border-t border-[#DDE1E5] dark:border-[#2A2D34]">
+            <div className="bg-[#EFEFF1]/60 dark:bg-[#121316]/60 rounded-xl p-3 text-center border border-[#DDE1E5] dark:border-[#2A2D34]">
+              <p className="text-[10px] text-[#65676B] dark:text-[#9CA3AF] font-bold uppercase tracking-wider mb-1">Planes</p>
+              <div className="flex items-center justify-center gap-1">
+                <Calendar className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6]" />
+                <p className="text-md font-extrabold text-[#1C1E21] dark:text-[#F3F4F6]">{profile.activities.length}</p>
+              </div>
+            </div>
+            <div className="bg-[#EFEFF1]/60 dark:bg-[#121316]/60 rounded-xl p-3 text-center border border-[#DDE1E5] dark:border-[#2A2D34]">
+              <p className="text-[10px] text-[#65676B] dark:text-[#9CA3AF] font-bold uppercase tracking-wider mb-1">Locales / Sedes</p>
+              <div className="flex items-center justify-center gap-1">
+                <Building2 className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6]" />
+                <p className="text-md font-extrabold text-[#1C1E21] dark:text-[#F3F4F6]">{venueDetails?.branchesCount || 1}</p>
+              </div>
+            </div>
+            <div
+              onClick={() => setActiveTab('wallet')}
+              className={`rounded-xl p-3 text-center border transition-all cursor-pointer ${
+                isSubActive
+                  ? 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/15'
+                  : 'bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/15'
+              }`}
+            >
+              <p className="text-[10px] text-[#65676B] dark:text-[#9CA3AF] font-bold uppercase tracking-wider mb-1">Suscripción</p>
+              <div className="flex items-center justify-center gap-1">
+                <CreditCard className={`w-4 h-4 ${isSubActive ? 'text-emerald-600' : 'text-rose-600'}`} />
+                <p className={`text-sm font-black ${isSubActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                  {isSubActive ? 'Activa' : 'Inactiva'}
+                </p>
+              </div>
             </div>
           </div>
-          <div className="bg-[#EFEFF1]/60 dark:bg-[#121316]/60 rounded-xl p-3 text-center border border-[#DDE1E5] dark:border-[#2A2D34]">
-            <p className="text-[10px] text-[#65676B] dark:text-[#9CA3AF] font-bold uppercase tracking-wider mb-1">Completados</p>
-            <div className="flex items-center justify-center gap-1">
-              <CheckCircle2 className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6]" />
-              <p className="text-md font-extrabold text-[#1C1E21] dark:text-[#F3F4F6]">{profile.completedActivities?.length || 0}</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2.5 mt-6 pt-5 border-t border-[#DDE1E5] dark:border-[#2A2D34]">
+            <div className="bg-[#EFEFF1]/60 dark:bg-[#121316]/60 rounded-xl p-3 text-center border border-[#DDE1E5] dark:border-[#2A2D34]">
+              <p className="text-[10px] text-[#65676B] dark:text-[#9CA3AF] font-bold uppercase tracking-wider mb-1">Planes</p>
+              <div className="flex items-center justify-center gap-1">
+                <Calendar className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6]" />
+                <p className="text-md font-extrabold text-[#1C1E21] dark:text-[#F3F4F6]">{profile.activities.length}</p>
+              </div>
+            </div>
+            <div className="bg-[#EFEFF1]/60 dark:bg-[#121316]/60 rounded-xl p-3 text-center border border-[#DDE1E5] dark:border-[#2A2D34]">
+              <p className="text-[10px] text-[#65676B] dark:text-[#9CA3AF] font-bold uppercase tracking-wider mb-1">Completados</p>
+              <div className="flex items-center justify-center gap-1">
+                <CheckCircle2 className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6]" />
+                <p className="text-md font-extrabold text-[#1C1E21] dark:text-[#F3F4F6]">{profile.completedActivities?.length || 0}</p>
+              </div>
+            </div>
+            <div 
+              onClick={() => isOwnProfile && setActiveTab('wallet')}
+              className={`rounded-xl p-3 text-center border transition-all ${
+                isOwnProfile 
+                  ? 'bg-amber-500/10 border-amber-500/30 cursor-pointer hover:bg-amber-500/15' 
+                  : 'bg-slate-50/50 border-slate-100/80'
+              }`}
+            >
+              <p className="text-[10px] text-amber-800 font-bold uppercase tracking-wider mb-1">SaleCoins</p>
+              <div className="flex items-center justify-center gap-1">
+                <span className="text-sm">🪙</span>
+                <p className="text-md font-black text-amber-950">{isOwnProfile ? balance : 100}</p>
+              </div>
             </div>
           </div>
-          <div 
-            onClick={() => isOwnProfile && setActiveTab('wallet')}
-            className={`rounded-xl p-3 text-center border transition-all ${
-              isOwnProfile 
-                ? 'bg-amber-500/10 border-amber-500/30 cursor-pointer hover:bg-amber-500/15' 
-                : 'bg-slate-50/50 border-slate-100/80'
-            }`}
-          >
-            <p className="text-[10px] text-amber-800 font-bold uppercase tracking-wider mb-1">SaleCoins</p>
-            <div className="flex items-center justify-center gap-1">
-              <span className="text-sm">🪙</span>
-              <p className="text-md font-black text-amber-950">{isOwnProfile ? balance : 100}</p>
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Billetera SaleCoins Banner (for own profile) */}
-        {isOwnProfile && (
+        {/* Commercial Data + Subscription Banner (Venue) OR Billetera SaleCoins Banner (Persona) */}
+        {isOwnProfile && isVenue && (
+          <div className="mt-5 space-y-3">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-[#008B8B] to-[#006666] dark:from-[#0f766e] dark:to-[#115e59] text-white shadow-md">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
+                    🏢 Suscripción Mensual B2B
+                  </span>
+                  <p className="text-xl font-black mt-1">
+                    {subscription?.planName || 'Plan Sede Única'} • S/ {subscription?.monthlyPricePen || 99}/mes
+                  </p>
+                  <p className="text-[11px] text-white/90 mt-0.5">
+                    Estado: <strong>{isSubActive ? 'Activa' : 'Requiere renovación'}</strong> • Boleta {subscription?.receiptNumber || 'B001-004821'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('wallet')}
+                    className="px-3.5 py-1.5 bg-white text-[#1C1E21] rounded-xl text-xs font-black shadow-sm hover:bg-slate-100 cursor-pointer"
+                  >
+                    Gestionar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/venue/dashboard')}
+                    className="text-[11px] text-white/90 hover:text-white underline font-semibold text-right cursor-pointer"
+                  >
+                    Ir al Panel
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#EFEFF1]/60 dark:bg-[#121316] border border-[#DDE1E5] dark:border-[#2A2D34] grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#65676B] dark:text-[#9CA3AF]">RUC Comercial</p>
+                <p className="font-black text-[#1C1E21] dark:text-[#F3F4F6] flex items-center gap-1 mt-0.5">
+                  <FileText className="w-3.5 h-3.5 text-[#008B8B]" />
+                  {venueDetails?.ruc || '20608945123'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#65676B] dark:text-[#9CA3AF]">Cantidad de Locales</p>
+                <p className="font-black text-[#1C1E21] dark:text-[#F3F4F6] flex items-center gap-1 mt-0.5">
+                  <Store className="w-3.5 h-3.5 text-[#008B8B]" />
+                  {venueDetails?.branchesCount || 1} {(venueDetails?.branchesCount || 1) === 1 ? 'local' : 'locales'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#65676B] dark:text-[#9CA3AF]">Dirección Principal</p>
+                <p className="font-bold text-[#1C1E21] dark:text-[#F3F4F6] truncate mt-0.5">
+                  {venueDetails?.address || 'Lima, Perú'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#65676B] dark:text-[#9CA3AF]">Teléfono Comercial</p>
+                <p className="font-bold text-[#1C1E21] dark:text-[#F3F4F6] flex items-center gap-1 mt-0.5">
+                  <Phone className="w-3.5 h-3.5 text-[#008B8B]" />
+                  {venueDetails?.phone || '987654321'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isOwnProfile && !isVenue && (
           <div className="mt-5 p-4 rounded-2xl bg-gradient-to-br from-amber-500 via-amber-600 to-amber-700 text-white shadow-md relative overflow-hidden">
             <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-white/10 rounded-full blur-lg pointer-events-none" />
             <div className="flex items-start justify-between relative z-10">
@@ -514,7 +671,7 @@ export default function Profile() {
                 : 'text-[#65676B] dark:text-[#9CA3AF] hover:text-[#1C1E21] dark:hover:text-[#F3F4F6]'
             }`}
           >
-            {isOwnProfile ? 'Mis Planes' : 'Planes de Actividad'} ({profile.activities.length})
+            {isVenue ? 'Planes del Local' : isOwnProfile ? 'Mis Planes' : 'Planes de Actividad'} ({profile.activities.length})
           </button>
           <button
             onClick={() => setActiveTab('reviews')}
@@ -524,28 +681,34 @@ export default function Profile() {
                 : 'text-[#65676B] dark:text-[#9CA3AF] hover:text-[#1C1E21] dark:hover:text-[#F3F4F6]'
             }`}
           >
-            Planes Creados ({profile.completedActivities?.length || 0})
+            {isVenue ? 'Historial' : 'Planes Creados'} ({profile.completedActivities?.length || 0})
           </button>
-          <button
-            onClick={() => setActiveTab('interests')}
-            className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
-              activeTab === 'interests'
-                ? 'bg-[#008B8B] dark:bg-[#14B8A6] text-white dark:text-[#121316] shadow-sm'
-                : 'text-[#65676B] dark:text-[#9CA3AF] hover:text-[#1C1E21] dark:hover:text-[#F3F4F6]'
-            }`}
-          >
-            Intereses
-          </button>
+          {!isVenue && (
+            <button
+              onClick={() => setActiveTab('interests')}
+              className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                activeTab === 'interests'
+                  ? 'bg-[#008B8B] dark:bg-[#14B8A6] text-white dark:text-[#121316] shadow-sm'
+                  : 'text-[#65676B] dark:text-[#9CA3AF] hover:text-[#1C1E21] dark:hover:text-[#F3F4F6]'
+              }`}
+            >
+              Intereses
+            </button>
+          )}
           {isOwnProfile && (
             <button
               onClick={() => setActiveTab('wallet')}
               className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer ${
                 activeTab === 'wallet'
-                  ? 'bg-amber-500 text-white shadow-sm'
-                  : 'text-amber-800 dark:text-amber-400 hover:text-amber-950 dark:hover:text-amber-300'
+                  ? isVenue
+                    ? 'bg-[#008B8B] text-white shadow-sm'
+                    : 'bg-amber-500 text-white shadow-sm'
+                  : isVenue
+                    ? 'text-[#008B8B] dark:text-[#14B8A6]'
+                    : 'text-amber-800 dark:text-amber-400 hover:text-amber-950 dark:hover:text-amber-300'
               }`}
             >
-              <span>🪙 Billetera</span>
+              <span>{isVenue ? '🏢 Suscripción' : '🪙 Billetera'}</span>
             </button>
           )}
         </div>
@@ -554,13 +717,17 @@ export default function Profile() {
         {activeTab === 'plans' && (
           <div className="space-y-4">
             {profile.activities.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center shadow-sm">
-                <p className="text-slate-500 text-sm mb-4">Aún no hay códigos de planes de esta persona activos.</p>
+              <div className="bg-white dark:bg-[#1E2025] rounded-2xl border border-[#DDE1E5] dark:border-[#2A2D34] p-8 text-center shadow-sm">
+                <p className="text-[#65676B] dark:text-[#9CA3AF] text-sm mb-4">
+                  {isVenue
+                    ? 'Tu local aún no tiene planes activos publicados.'
+                    : 'Aún no hay códigos de planes de esta persona activos.'}
+                </p>
                 <button
-                  onClick={() => navigate('/feed')}
-                  className="px-5 py-2.5 bg-violet-700 text-white font-extrabold text-xs rounded-xl hover:bg-violet-800 transition-colors shadow"
+                  onClick={() => navigate(isVenue ? '/activity/create' : '/feed')}
+                  className="px-5 py-2.5 bg-[#FF5733] text-white font-extrabold text-xs rounded-xl hover:bg-[#E04826] transition-colors shadow cursor-pointer"
                 >
-                  Explorar Feed de Actividades
+                  {isVenue ? '+ Publicar primer plan del local' : 'Explorar Feed de Actividades'}
                 </button>
               </div>
             ) : (
@@ -651,8 +818,8 @@ export default function Profile() {
           </div>
         )}
 
-        {/* Tab Content 3: Interests */}
-        {activeTab === 'interests' && (
+        {/* Tab Content 3: Interests (Personal users only) */}
+        {activeTab === 'interests' && !isVenue && (
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-extrabold text-slate-900 text-sm">Etiquetas e Intereses</h3>
@@ -707,8 +874,87 @@ export default function Profile() {
           </div>
         )}
 
-        {/* Tab Content 4: Billetera & Historial SaleCoins */}
-        {activeTab === 'wallet' && isOwnProfile && (
+        {/* Tab Content 4: Suscripción Mensual (Venue) OR Billetera SaleCoins (Persona) */}
+        {activeTab === 'wallet' && isOwnProfile && isVenue && (
+          <div className="space-y-4">
+            <div className="p-5 rounded-3xl bg-gradient-to-br from-[#008B8B] to-[#006666] dark:from-[#0f766e] dark:to-[#115e59] text-white shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20">
+                    🏢 Suscripción Comercial Mensual
+                  </span>
+                  <div className="mt-1.5 flex items-baseline gap-2">
+                    <span className="text-2xl font-black">{subscription?.planName || 'Plan Sede Única'}</span>
+                    <span className="text-sm font-bold text-white/85">S/ {subscription?.monthlyPricePen || 99}.00 / mes</span>
+                  </div>
+                  <p className="text-xs text-white/90 mt-1">
+                    Estado: <strong>{isSubActive ? 'Activa' : 'Inactiva / Pendiente'}</strong> • {venueDetails?.branchesCount || 1}{' '}
+                    {(venueDetails?.branchesCount || 1) === 1 ? 'sede registrada' : 'sedes registradas'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isRenewingSub}
+                  onClick={() => handleRenewVenueSub()}
+                  className="px-4 py-2.5 bg-white text-[#1C1E21] rounded-xl text-xs font-black shadow hover:bg-slate-100 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`w-4 h-4 text-[#008B8B] ${isRenewingSub ? 'animate-spin' : ''}`} />
+                  <span>{isRenewingSub ? 'Procesando...' : isSubActive ? 'Renovar +30 días' : 'Activar Suscripción'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-[#1E2025] rounded-2xl border border-[#DDE1E5] dark:border-[#2A2D34] p-5 space-y-3">
+              <h4 className="font-black text-sm text-[#1C1E21] dark:text-[#F3F4F6]">
+                Reglas de Cuenta para Locales Aliados
+              </h4>
+              <p className="text-xs text-[#65676B] dark:text-[#9CA3AF] leading-relaxed">
+                El sistema de SaleCoins no aplica a tu local. Con tu suscripción mensual puedes crear y publicar planes ilimitados, sin ocupar cupos de tus asistentes.
+              </p>
+
+              <div className="grid grid-cols-2 gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={isRenewingSub}
+                  onClick={() => handleRenewVenueSub('single')}
+                  className={`p-3 rounded-xl border text-left cursor-pointer ${
+                    subscription?.planId === 'single' ? 'border-[#008B8B] bg-[#008B8B]/10' : 'border-[#DDE1E5] dark:border-[#2A2D34]'
+                  }`}
+                >
+                  <p className="text-xs font-black">Plan Sede Única</p>
+                  <p className="text-sm font-black text-[#008B8B] dark:text-[#14B8A6]">S/ 99 / mes</p>
+                </button>
+                <button
+                  type="button"
+                  disabled={isRenewingSub}
+                  onClick={() => handleRenewVenueSub('multi')}
+                  className={`p-3 rounded-xl border text-left cursor-pointer ${
+                    subscription?.planId === 'multi' ? 'border-[#FF5733] bg-[#FF5733]/10' : 'border-[#DDE1E5] dark:border-[#2A2D34]'
+                  }`}
+                >
+                  <p className="text-xs font-black">Plan Multisede</p>
+                  <p className="text-sm font-black text-[#FF5733] dark:text-[#FF6B4A]">S/ 179 / mes</p>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDownloadVenueReceipt}
+                className="w-full py-2.5 rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] text-xs font-bold text-[#1C1E21] dark:text-[#F3F4F6] flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#121316]"
+              >
+                <Download className="w-4 h-4 text-[#008B8B]" />
+                <span>
+                  {receiptDownloaded
+                    ? `Comprobante ${subscription?.receiptNumber || 'B001-004821'} descargado`
+                    : `Descargar Boleta Electrónica (${subscription?.receiptNumber || 'B001-004821'})`}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'wallet' && isOwnProfile && !isVenue && (
           <div className="space-y-5">
             {/* Wallet Overview Box */}
             <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-amber-600 to-amber-700 text-white shadow-lg relative overflow-hidden">
@@ -993,16 +1239,56 @@ export default function Profile() {
               {/* Name field */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1">
-                  Nombre visible
+                  {isVenue ? 'Nombre Comercial del Local' : 'Nombre visible'}
                 </label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Tu nombre o apodo"
+                  placeholder={isVenue ? 'Nombre de tu negocio' : 'Tu nombre o apodo'}
                   className="w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] px-3.5 py-2.5 text-sm text-[#1C1E21] dark:text-[#F3F4F6] focus:outline-none focus:border-[#008B8B] dark:focus:border-[#14B8A6] focus:ring-2 focus:ring-[#008B8B]/20"
                 />
               </div>
+
+              {isVenue && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1">
+                      Cantidad de Locales
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={editBranchesCount}
+                      onChange={(e) => setEditBranchesCount(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] px-3.5 py-2.5 text-sm text-[#1C1E21] dark:text-[#F3F4F6] focus:outline-none focus:border-[#008B8B]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1">
+                      Teléfono Comercial
+                    </label>
+                    <input
+                      type="tel"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      className="w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] px-3.5 py-2.5 text-sm text-[#1C1E21] dark:text-[#F3F4F6] focus:outline-none focus:border-[#008B8B]"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1">
+                      Dirección de Sede Principal
+                    </label>
+                    <input
+                      type="text"
+                      value={editAddress}
+                      onChange={(e) => setEditAddress(e.target.value)}
+                      className="w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] px-3.5 py-2.5 text-sm text-[#1C1E21] dark:text-[#F3F4F6] focus:outline-none focus:border-[#008B8B]"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Bio field */}
               <div>
@@ -1048,22 +1334,26 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Wallet Modals */}
-      <RechargeModal
-        isOpen={isRechargeOpen}
-        onClose={() => setIsRechargeOpen(false)}
-      />
-      <SaleCoinsExplanationModal
-        isOpen={isExplanationOpen}
-        onClose={() => setIsExplanationOpen(false)}
-        onOpenRecharge={() => setIsRechargeOpen(true)}
-      />
+      {/* Wallet Modals (Personal users only) */}
+      {!isVenue && (
+        <>
+          <RechargeModal
+            isOpen={isRechargeOpen}
+            onClose={() => setIsRechargeOpen(false)}
+          />
+          <SaleCoinsExplanationModal
+            isOpen={isExplanationOpen}
+            onClose={() => setIsExplanationOpen(false)}
+            onOpenRecharge={() => setIsRechargeOpen(true)}
+          />
+        </>
+      )}
       <TermsAndConditionsModal
         isOpen={isTermsOpen}
         onClose={() => setIsTermsOpen(false)}
       />
 
-      <BottomNav activeTab={isOwnProfile ? "profile" : "feed"} />
+      <BottomNav activeTab={isOwnProfile ? "profile" : "home"} />
     </div>
   );
 }

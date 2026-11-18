@@ -2,15 +2,32 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useActivities } from '../hooks/useActivities';
 import { BottomNav } from '../components/shared/bottom-nav';
-import { MessageSquare, Calendar, MapPin, Users, HeartHandshake, Compass } from 'lucide-react';
+import { MessageSquare, Calendar, MapPin, Users, HeartHandshake, Compass, Plus } from 'lucide-react';
 import { NotificationBell } from '../components/notifications/NotificationBell';
+import { useAuthStore } from '../store/authStore';
 
 export default function Chats() {
   const { data: activities, isLoading } = useActivities();
+  const user = useAuthStore((state) => state.user);
+  const isVenue = user?.role === 'venue';
   const navigate = useNavigate();
 
-  // Highlight activities that user has joined/opted-in-to
-  const joinedActivities = activities?.filter(act => act.isJoined) || [];
+  // Highlight activities that user has joined OR venue owns
+  const joinedActivities =
+    activities?.filter((act) => {
+      if (isVenue) {
+        if (act.creatorId && user?.id && act.creatorId === user.id) return true;
+        if (
+          user?.id === 'venue-demo-barbarian' &&
+          act.organizerType === 'venue' &&
+          act.organizerName?.toLowerCase().includes('barbarian')
+        ) {
+          return true;
+        }
+        return false;
+      }
+      return act.isJoined;
+    }) || [];
 
   return (
     <div className="bg-[#EFEFF1] dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] min-h-screen pb-24 max-w-2xl mx-auto flex flex-col border-x border-[#DDE1E5] dark:border-[#2A2D34] transition-colors">
@@ -62,16 +79,18 @@ export default function Chats() {
             
             <h3 className="text-base font-black text-[#1C1E21] dark:text-[#F3F4F6] leading-tight">No tienes chats activos aún</h3>
             <p className="text-xs text-[#65676B] dark:text-[#9CA3AF] max-w-sm mt-1.5 leading-relaxed">
-              Los chats grupales se habilitan automáticamente cuando te unes a un plan. ¡Encuentra tu próxima aventura en el feed!
+              {isVenue
+                ? 'Los chats grupales de tu local se habilitan automáticamente en cuanto publiques un plan para coordinar con tus clientes.'
+                : 'Los chats grupales se habilitan automáticamente cuando te unes a un plan. ¡Encuentra tu próxima aventura en el feed!'}
             </p>
             
             <button
-              onClick={() => navigate('/feed')}
+              onClick={() => navigate(isVenue ? '/activity/create' : '/feed')}
               className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-[#FF5733] hover:bg-[#E04826] dark:bg-[#FF6B4A] dark:hover:bg-[#FF5733] text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer"
               id="empty-chat-cta"
             >
-              <Compass className="w-4 h-4" />
-              Explorar actividades
+              {isVenue ? <Plus className="w-4 h-4" /> : <Compass className="w-4 h-4" />}
+              {isVenue ? 'Publicar un plan' : 'Explorar actividades'}
             </button>
           </div>
         ) : (
@@ -111,7 +130,7 @@ export default function Chats() {
                           {activity.category}
                         </span>
                         <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-black bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                          Inscrito ✓
+                          {isVenue ? '🏢 Local Anfitrión' : 'Inscrito ✓'}
                         </span>
                       </div>
                       

@@ -344,22 +344,33 @@ export const useUserProfile = (profileId?: string): UserProfile | null => {
   if (!profileId || profileId === 'me' || (user && profileId === user.id)) {
     if (!user) return null;
     
-    // User's own created or joined activities (isolated strictly to current user)
-    const userActivities = allActivities.filter(act => 
-      act.isJoined || (act.creatorId && user.id && act.creatorId === user.id)
-    );
+    // User's own created or joined activities (isolated strictly to current user, plus Barbarian demo venue plans)
+    const userActivities = allActivities.filter(act => {
+      if (act.isJoined || (act.creatorId && user.id && act.creatorId === user.id)) return true;
+      if (
+        user.role === 'venue' &&
+        user.id === 'venue-demo-barbarian' &&
+        act.organizerType === 'venue' &&
+        act.organizerName?.toLowerCase().includes('barbarian')
+      ) {
+        return true;
+      }
+      return false;
+    });
 
     return {
       id: user.id || 'me',
-      name: user.name || 'Usuario',
+      name: user.role === 'venue' && user.venueDetails?.businessName ? user.venueDetails.businessName : (user.name || 'Usuario'),
       bio: user.bio && user.bio.trim() !== '' 
         ? user.bio 
-        : 'Miembro activo de la comunidad ¿Qué Sale?. Me encanta sumarme a planes grupales y conectar con personas con intereses afines.',
+        : (user.role === 'venue'
+            ? 'Local aliado en ¿Qué Sale? Publicando experiencias grupales para la comunidad.'
+            : 'Miembro activo de la comunidad ¿Qué Sale?. Me encanta sumarme a planes grupales y conectar con personas con intereses afines.'),
       email: user.email || 'usuario@quesale.pe',
       interests: user.interests || [],
       rating: 5.0,
       reviewsCount: 6,
-      badge: 'Miembro Activo',
+      badge: user.role === 'venue' ? 'Local Aliado Verificado' : 'Miembro Activo',
       xpPoints: 120,
       reviews: [], // No more personal comments
       activities: userActivities,

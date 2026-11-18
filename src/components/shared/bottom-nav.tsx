@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Compass, MessageSquare, Plus, User } from 'lucide-react';
+import { Compass, MessageSquare, Plus, User, Building2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
 
@@ -11,6 +11,7 @@ interface BottomNavProps {
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const isVenue = user?.role === 'venue';
   const unreadChatCount = useNotificationStore((state) =>
     state.notifications.filter((n) => !n.read && n.type === 'chat_message').length
   );
@@ -18,10 +19,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1E2025] border-t border-[#DDE1E5] dark:border-[#2A2D34] pb-safe z-40 shadow-[0_-2px_12px_rgba(0,0,0,0.04)] dark:shadow-[0_-2px_12px_rgba(0,0,0,0.3)]">
       <div className="flex justify-around items-center h-16 max-w-3xl mx-auto px-4 relative">
-        {/* Home/Feed */}
+        {/* Home/Feed or Mi Local */}
         <button
           type="button"
-          onClick={() => navigate('/feed')}
+          onClick={() => navigate(isVenue ? '/venue/dashboard' : '/feed')}
           className={`flex flex-col items-center justify-center w-16 h-full transition-colors cursor-pointer ${
             activeTab === 'home'
               ? 'text-[#008B8B] dark:text-[#14B8A6]' 
@@ -33,8 +34,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
               ? 'bg-[#008B8B]/10 dark:bg-[#14B8A6]/15 font-black' 
               : 'bg-transparent'
           }`}>
-            <Compass className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] font-extrabold leading-none">Home</span>
+            {isVenue ? <Building2 className="w-5 h-5 mb-0.5" /> : <Compass className="w-5 h-5 mb-0.5" />}
+            <span className="text-[10px] font-extrabold leading-none">{isVenue ? 'Mi Local' : 'Home'}</span>
           </div>
         </button>
 
@@ -82,7 +83,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
               ? 'text-[#FF5733] dark:text-[#FF6B4A]' 
               : 'text-[#65676B] dark:text-[#9CA3AF]'
           }`}>
-            Crear
+            {isVenue ? 'Publicar' : 'Crear'}
           </span>
         </div>
 
@@ -111,7 +112,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
             ) : (
               <User className="w-5 h-5 mb-0.5" />
             )}
-            <span className="text-[10px] font-extrabold leading-none">Perfil</span>
+            <span className="text-[10px] font-extrabold leading-none">{isVenue ? 'Suscripción' : 'Perfil'}</span>
           </div>
         </button>
       </div>

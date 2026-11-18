@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useAuthStore } from '../../store/authStore';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -93,6 +94,7 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
   onJoinClick
 }) => {
   const navigate = useNavigate();
+  const isVenue = useAuthStore((state) => state.user?.role === 'venue');
   const [imageError, setImageError] = React.useState(false);
 
   const getCategoryIcon = (cat: string) => {
@@ -226,10 +228,12 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
             </div>
           )}
 
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md shrink-0" title="Reserva de 20 SaleCoins (reembolsable si se cancela)">
-            <span>🪙</span>
-            <span>20 monedas</span>
-          </span>
+          {!isVenue && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md shrink-0" title="Reserva de 20 SaleCoins (reembolsable si se cancela)">
+              <span>🪙</span>
+              <span>20 monedas</span>
+            </span>
+          )}
 
           {organizerName && (
             <span className="text-[11px] text-[#65676B] dark:text-[#9CA3AF] font-medium truncate max-w-[150px]">
@@ -258,22 +262,35 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
             </div>
           </div>
 
-          {/* Bold Coral Orange "Join Plan" / "Unirme" CTA button */}
-          <button 
-            type="button"
-            onClick={(e) => {
-               e.stopPropagation();
-               if(onJoinClick) onJoinClick(e, id);
-            }}
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm active:scale-95 cursor-pointer",
-              isJoined 
-                ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-200" 
-                : "bg-[#FF5733] hover:bg-[#E04826] dark:bg-[#FF6B4A] dark:hover:bg-[#FF5733] text-white shadow-[#FF5733]/25"
-            )}
-          >
-            {isJoined ? '✓ Confirmado' : 'Unirme • 20 🪙'}
-          </button>
+          {/* Bold Coral Orange "Join Plan" / "Unirme" CTA button (or Ver detalle for venues) */}
+          {isVenue ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/activity/${id}`);
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm active:scale-95 cursor-pointer bg-[#008B8B] hover:bg-[#007575] dark:bg-[#14B8A6] dark:hover:bg-[#0d9488] text-white dark:text-[#121316]"
+            >
+              Ver detalle →
+            </button>
+          ) : (
+            <button 
+              type="button"
+              onClick={(e) => {
+                 e.stopPropagation();
+                 if(onJoinClick) onJoinClick(e, id);
+              }}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm active:scale-95 cursor-pointer",
+                isJoined 
+                  ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-200" 
+                  : "bg-[#FF5733] hover:bg-[#E04826] dark:bg-[#FF6B4A] dark:hover:bg-[#FF5733] text-white shadow-[#FF5733]/25"
+              )}
+            >
+              {isJoined ? '✓ Confirmado' : 'Unirme • 20 🪙'}
+            </button>
+          )}
         </div>
       </div>
     </div>

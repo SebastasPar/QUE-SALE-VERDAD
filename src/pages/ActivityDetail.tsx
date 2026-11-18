@@ -17,6 +17,7 @@ import {
   RotateCcw,
   AlertTriangle,
   Sparkles,
+  Building2,
 } from "lucide-react";
 import { clsx } from "clsx";
 import PlanMap from "../components/shared/PlanMap";
@@ -116,14 +117,29 @@ function ActivityDetail({ id }: { id: string }) {
     });
   };
 
-  const isCreatedByUser = id.startsWith("new-");
+  const isVenue = currentUser?.role === "venue";
+  const isVenueOwner =
+    isVenue &&
+    (activity.creatorId === currentUser?.id ||
+      (currentUser?.id === "venue-demo-barbarian" &&
+        activity.organizerType === "venue" &&
+        activity.organizerName?.toLowerCase().includes("barbarian")));
+
+  const isCreatedByUser =
+    (Boolean(activity.creatorId && currentUser?.id && activity.creatorId === currentUser.id)) ||
+    id.startsWith("new-") ||
+    isVenueOwner;
+
   const host =
     isCreatedByUser && currentUser
       ? {
           id: currentUser.id || "me",
-          name: currentUser.name || "Tú",
+          name:
+            isVenue && currentUser.venueDetails?.businessName
+              ? currentUser.venueDetails.businessName
+              : currentUser.name || "Tú",
           avatarUrl: currentUser.avatarUrl,
-          badge: "Anfitrión Principal",
+          badge: isVenue ? "🏢 Local Oficial" : "Anfitrión Principal",
           rating: 5.0,
           reviewsCount: 3,
         }
@@ -148,7 +164,7 @@ function ActivityDetail({ id }: { id: string }) {
         </h1>
         <div className="flex items-center gap-1.5 sm:gap-2">
           <NotificationBell />
-          <SaleCoinsBadge />
+          {!isVenue && <SaleCoinsBadge />}
           <button className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF] transition-colors cursor-pointer">
             <Share2 className="w-5 h-5" />
           </button>
@@ -296,40 +312,68 @@ function ActivityDetail({ id }: { id: string }) {
           </div>
         )}
 
-        {/* SaleCoins Commitment & Guarantee Card */}
-        <div className="mb-6 p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/40 dark:from-amber-950/30 dark:to-orange-950/20 border border-amber-200/90 dark:border-amber-900/50 shadow-2xs">
-          <div className="flex items-start justify-between gap-3">
+        {/* SaleCoins Commitment Card (Persona) vs Venue Quota Info Card (Local) */}
+        {isVenue ? (
+          <div className="mb-6 p-4 rounded-2xl bg-[#008B8B]/10 dark:bg-[#14B8A6]/15 border border-[#008B8B]/25 dark:border-[#14B8A6]/30 shadow-2xs">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xl shrink-0 shadow-2xs">
-                🪙
+              <div className="w-10 h-10 rounded-xl bg-[#008B8B] dark:bg-[#14B8A6] text-white dark:text-[#121316] flex items-center justify-center shrink-0">
+                <Building2 className="w-5 h-5" />
               </div>
-              <div>
+              <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                    Reserva y Compromiso
+                  <h4 className="text-sm font-black text-[#1C1E21] dark:text-[#F3F4F6]">
+                    Vista de Gestión del Local
                   </h4>
-                  <span className="px-2 py-0.5 rounded-full bg-amber-200/80 dark:bg-amber-900/70 text-amber-900 dark:text-amber-200 text-[11px] font-black">
-                    20 SaleCoins (~S/ 2.00)
+                  <span className="px-2 py-0.5 rounded-full bg-[#008B8B]/15 dark:bg-[#14B8A6]/20 text-[#008B8B] dark:text-[#14B8A6] text-[10px] font-black uppercase">
+                    Suscripción Mensual Activa
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                  Para evitar el absentismo (<strong className="text-amber-800 dark:text-amber-400">no-show</strong>) y asegurar que el grupo salga completo, unirte reserva 20 SaleCoins.
+                <p className="text-xs font-bold text-[#1C1E21] dark:text-[#F3F4F6]">
+                  {activity.currentAttendees} de {activity.maxAttendees} cupos reservados por usuarios — El local no ocupa cupo.
                 </p>
-                <div className="mt-2.5 flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                  <RotateCcw className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span>Garantía de reembolso: Si se cancela por el organizador o local, tus monedas se devuelven intactas.</span>
-                </div>
+                {activity.discountOffer && (
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                    🎁 Beneficio grupal incluido: {activity.discountOffer}
+                  </p>
+                )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsExplanationOpen(true)}
-              className="text-xs font-bold text-amber-800 dark:text-amber-300 hover:text-amber-950 underline shrink-0 mt-0.5"
-            >
-              ¿Cómo funciona?
-            </button>
           </div>
-        </div>
+        ) : (
+          <div className="mb-6 p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/40 dark:from-amber-950/30 dark:to-orange-950/20 border border-amber-200/90 dark:border-amber-900/50 shadow-2xs">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xl shrink-0 shadow-2xs">
+                  🪙
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      Reserva y Compromiso
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-200/80 dark:bg-amber-900/70 text-amber-900 dark:text-amber-200 text-[11px] font-black">
+                      20 SaleCoins (~S/ 2.00)
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                    Para evitar el absentismo (<strong className="text-amber-800 dark:text-amber-400">no-show</strong>) y asegurar que el grupo salga completo, unirte reserva 20 SaleCoins.
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                    <RotateCcw className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Garantía de reembolso: Si se cancela por el organizador o local, tus monedas se devuelven intactas.</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExplanationOpen(true)}
+                className="text-xs font-bold text-amber-800 dark:text-amber-300 hover:text-amber-950 underline shrink-0 mt-0.5"
+              >
+                ¿Cómo funciona?
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Creator Management Box if User is Organizer */}
         {isCreatedByUser && !activity.isCancelled && (
@@ -338,10 +382,12 @@ function ActivityDetail({ id }: { id: string }) {
               <div>
                 <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-violet-600" />
-                  <span>Eres el organizador de este plan</span>
+                  <span>{isVenue ? 'Eres el local anfitrión de este plan' : 'Eres el organizador de este plan'}</span>
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Si te surge un imprevisto, puedes cancelar el plan para devolver las SaleCoins a todos.
+                  {isVenue
+                    ? 'Si surge un imprevisto en tu sede, puedes cancelar el plan y notificar al grupo.'
+                    : 'Si te surge un imprevisto, puedes cancelar el plan para devolver las SaleCoins a todos.'}
                 </p>
               </div>
               <button
@@ -463,10 +509,15 @@ function ActivityDetail({ id }: { id: string }) {
           <div className="flex justify-between items-end mb-4">
             <h3 className="font-bold text-[#1C1E21] dark:text-[#F3F4F6]">Quién asiste</h3>
             <span className="text-xs font-semibold text-[#008B8B] dark:text-[#14B8A6]">
-              {activity.currentAttendees} personas
+              {activity.currentAttendees} / {activity.maxAttendees} cupos
             </span>
           </div>
-          <div className="flex space-x-4 overflow-x-auto pb-4 no-scrollbar">
+          {activity.currentAttendees === 0 ? (
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#1E2025] border border-[#DDE1E5] dark:border-[#2A2D34] text-xs text-[#65676B] dark:text-[#9CA3AF] font-medium">
+              Aún no hay usuarios inscritos. Los {activity.maxAttendees} cupos están completamente disponibles (el local no ocupa cupo).
+            </div>
+          ) : (
+            <div className="flex space-x-4 overflow-x-auto pb-4 no-scrollbar">
             {[...Array(Math.min(activity.currentAttendees, 5))].map((_, i) => {
               const mockAvatarUrls = [
                 "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&h=150&q=80",
@@ -507,7 +558,8 @@ function ActivityDetail({ id }: { id: string }) {
                 </div>
               );
             })}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -515,7 +567,25 @@ function ActivityDetail({ id }: { id: string }) {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 dark:bg-[#1E2025]/95 backdrop-blur-md border-t border-[#DDE1E5] dark:border-[#2A2D34] pb-safe z-40 max-w-3xl mx-auto shadow-[0_-4px_16px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_16px_rgba(0,0,0,0.4)]">
         {activity.isCancelled ? (
           <div className="w-full py-3.5 rounded-2xl text-sm font-black bg-slate-100 dark:bg-slate-800 text-[#65676B] dark:text-[#9CA3AF] text-center border border-[#DDE1E5] dark:border-[#2A2D34]">
-            Salida cancelada • SaleCoins reembolsadas
+            {isVenue ? 'Plan cancelado por el local' : 'Salida cancelada • SaleCoins reembolsadas'}
+          </div>
+        ) : isVenue ? (
+          <div className="flex gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => navigate(`/chat/${id}`)}
+              className="flex-1 py-3.5 bg-[#008B8B] hover:bg-[#007575] dark:bg-[#14B8A6] dark:hover:bg-[#0D9488] text-white dark:text-[#121316] rounded-2xl text-sm font-black shadow-md transition-all flex justify-center items-center gap-2 cursor-pointer"
+            >
+              <MessageSquare className="w-5 h-5" />
+              Ir al Chat de Coordinación
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/venue/dashboard')}
+              className="px-4 py-3.5 bg-[#EFEFF1] dark:bg-[#121316] border border-[#DDE1E5] dark:border-[#2A2D34] text-[#1C1E21] dark:text-[#F3F4F6] hover:border-[#008B8B] rounded-2xl text-xs font-black transition-all shrink-0 cursor-pointer"
+            >
+              Panel del Local
+            </button>
           </div>
         ) : activity.isJoined ? (
           <div className="flex gap-2 w-full">
@@ -582,16 +652,20 @@ function ActivityDetail({ id }: { id: string }) {
       )}
 
       {/* Modals */}
-      <RechargeModal
-        isOpen={isRechargeOpen}
-        onClose={() => setIsRechargeOpen(false)}
-        requiredAmount={20}
-      />
-      <SaleCoinsExplanationModal
-        isOpen={isExplanationOpen}
-        onClose={() => setIsExplanationOpen(false)}
-        onOpenRecharge={() => setIsRechargeOpen(true)}
-      />
+      {!isVenue && (
+        <>
+          <RechargeModal
+            isOpen={isRechargeOpen}
+            onClose={() => setIsRechargeOpen(false)}
+            requiredAmount={20}
+          />
+          <SaleCoinsExplanationModal
+            isOpen={isExplanationOpen}
+            onClose={() => setIsExplanationOpen(false)}
+            onOpenRecharge={() => setIsRechargeOpen(true)}
+          />
+        </>
+      )}
     </div>
   );
 }
