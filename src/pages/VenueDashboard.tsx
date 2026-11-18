@@ -17,11 +17,13 @@ import {
   RefreshCw,
   X,
   Download,
+  Mail,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useActivities, Activity } from '../hooks/useActivities';
 import { BottomNav } from '../components/shared/bottom-nav';
 import { NotificationBell } from '../components/notifications/NotificationBell';
+import { sendReceiptEmailWithPdf, downloadReceiptPdf, SendReceiptPayload } from '../utils/receiptPdf';
 
 export default function VenueDashboard() {
   const navigate = useNavigate();
@@ -32,6 +34,16 @@ export default function VenueDashboard() {
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [isRenewing, setIsRenewing] = useState(false);
   const [receiptDownloaded, setReceiptDownloaded] = useState(false);
+  const [receiptEmail, setReceiptEmail] = useState(user?.email || '');
+  const [payMethod, setPayMethod] = useState<'yape' | 'plin' | 'card'>(
+    user?.subscription?.paymentMethod || 'yape'
+  );
+  const [isResendingEmail, setIsResendingEmail] = useState(false);
+  const [emailFeedback, setEmailFeedback] = useState<{
+    mode: 'live' | 'simulated' | 'resend_error';
+    text: string;
+  } | null>(null);
+  const [latestPdfBase64, setLatestPdfBase64] = useState<string | undefined>(undefined);
 
   const venueDetails = user?.venueDetails;
   const subscription = user?.subscription;
@@ -82,11 +94,47 @@ export default function VenueDashboard() {
     navigate('/activity/create');
   };
 
+  const buildVenueReceiptPayload = (overrides?: Partial<SendReceiptPayload>): SendReceiptPayload => {
+    const targetEmail = (receiptEmail || user?.email || 'aliados@quesale.pe').trim();
+    const targetPlanName = overrides?.planName || subscription?.planName || (branchesCount > 1 ? 'Plan Multisede' : 'Plan Sede Única');
+    const targetPrice = overrides?.totalSoles ?? subscription?.monthlyPricePen ?? (branchesCount > 1 ? 179 : 99);
+    const targetReceipt = overrides?.receiptNumber || subscription?.receiptNumber || 'B001-004821';
+    const targetRenew = overrides?.renewsAt || subscription?.renewsAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    return {
+      receiptType: 'venue',
+      receiptNumber: targetReceipt,
+      customerEmail: targetEmail,
+      customerName: businessName,
+      totalSoles: targetPrice,
+      businessName,
+      ruc: venueDetails?.ruc || '20600000001',
+      branchesCount,
+      planName: targetPlanName,
+      renewsAt: targetRenew,
+      address: venueDetails?.address || 'Lima, Perú',
+      paymentMethod: overrides?.paymentMethod || payMethod,
+      issuedAt: overrides?.issuedAt || subscription?.activatedAt || new Date().toISOString(),
+    };
+  };
+
   const handleRenewSubscription = async (planId?: 'single' | 'multi') => {
+    const targetEmail = (receiptEmail || user?.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setEmailFeedback({
+        mode: 'resend_error',
+        text: 'Ingresa un correo Gmail válido para enviar tu boleta de suscripción en PDF.',
+      });
+      return;
+    }
+
     setIsRenewing(true);
+    setEmailFeedback(null);
     await new Promise((resolve) => setTimeout(resolve, 750));
     const targetPlanId = planId || subscription?.planId || (branchesCount > 1 ? 'multi' : 'single');
     const isMulti = targetPlanId === 'multi';
+    const planName = isMulti ? 'Plan Multisede' : 'Plan Sede Única';
+    const monthlyPricePen = isMulti ? 179 : 99;
     const now = new Date();
     const nextRenewal = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const nextReceipt = `B001-${String(Math.floor(100000 + Math.random() * 899999))}`;
@@ -94,16 +142,69 @@ export default function VenueDashboard() {
     updateSubscription({
       status: 'active',
       planId: targetPlanId,
-      planName: isMulti ? 'Plan Multisede' : 'Plan Sede Única',
-      monthlyPricePen: isMulti ? 179 : 99,
+      planName,
+      monthlyPricePen,
       activatedAt: now.toISOString(),
       renewsAt: nextRenewal.toISOString(),
       receiptNumber: nextReceipt,
+      paymentMethod: payMethod,
     });
+
+    const payload = buildVenueReceiptPayload({
+      receiptNumber: nextReceipt,
+      planName,
+      totalSoles: monthlyPricePen,
+      renewsAt: nextRenewal.toISOString(),
+      issuedAt: now.toISOString(),
+      paymentMethod: payMethod,
+    });
+
+    const res = await sendReceiptEmailWithPdf(payload);
+    if (res.pdfBase64) setLatestPdfBase64(res.pdfBase64);
+
+    setEmailFeedback({
+      mode: res.mode,
+      text:
+        res.mode === 'live'
+          ? `Boleta PDF ${nextReceipt} enviada a ${targetEmail}`
+          : res.mode === 'simulated'
+            ? `Boleta PDF ${nextReceipt} generada para ${targetEmail} (modo demo)`
+            : res.error || 'Pago aplicado, pero no se pudo entregar el correo. Usa Reenviar.',
+    });
+
     setIsRenewing(false);
   };
 
+  const handleResendVenueReceipt = async () => {
+    const targetEmail = (receiptEmail || user?.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setEmailFeedback({
+        mode: 'resend_error',
+        text: 'Ingresa un correo Gmail válido para reenviar la boleta.',
+      });
+      return;
+    }
+
+    setIsResendingEmail(true);
+    setEmailFeedback(null);
+    const payload = buildVenueReceiptPayload();
+    const res = await sendReceiptEmailWithPdf(payload);
+    if (res.pdfBase64) setLatestPdfBase64(res.pdfBase64);
+
+    setEmailFeedback({
+      mode: res.mode,
+      text:
+        res.mode === 'live'
+          ? `Copia PDF de ${payload.receiptNumber} reenviada a ${targetEmail}`
+          : res.mode === 'simulated'
+            ? `Copia PDF generada para ${targetEmail} (modo demo)`
+            : res.error || 'No se pudo reenviar la boleta PDF.',
+    });
+    setIsResendingEmail(false);
+  };
+
   const handleDownloadReceipt = () => {
+    downloadReceiptPdf(buildVenueReceiptPayload(), latestPdfBase64);
     setReceiptDownloaded(true);
     setTimeout(() => setReceiptDownloaded(false), 3000);
   };
@@ -516,6 +617,57 @@ export default function VenueDashboard() {
               </div>
             </div>
 
+            {/* Payment method + Gmail recipient */}
+            <div className="space-y-3">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1.5">
+                  Medio de Pago (Culqi)
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['yape', 'plin', 'card'] as const).map((method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => setPayMethod(method)}
+                      className={`py-2 px-2.5 rounded-xl border text-xs font-black capitalize cursor-pointer transition-all ${
+                        payMethod === method
+                          ? 'border-[#008B8B] bg-[#008B8B]/10 text-[#008B8B] dark:text-[#14B8A6]'
+                          : 'border-[#DDE1E5] dark:border-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF]'
+                      }`}
+                    >
+                      {method === 'card' ? 'Tarjeta' : method}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6]" />
+                  <span>Gmail para envío de Boleta PDF</span>
+                </label>
+                <input
+                  type="email"
+                  value={receiptEmail}
+                  onChange={(e) => setReceiptEmail(e.target.value)}
+                  placeholder="tulocal@gmail.com"
+                  className="w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-[#EFEFF1]/50 dark:bg-[#121316] px-3.5 py-2 text-xs font-semibold text-[#1C1E21] dark:text-[#F3F4F6] focus:outline-none focus:border-[#008B8B]"
+                />
+              </div>
+            </div>
+
+            {emailFeedback && (
+              <div
+                className={`p-3 rounded-xl text-xs font-semibold border ${
+                  emailFeedback.mode === 'resend_error'
+                    ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                }`}
+              >
+                {emailFeedback.text}
+              </div>
+            )}
+
             {/* Actions */}
             <div className="space-y-2.5">
               <button
@@ -534,23 +686,35 @@ export default function VenueDashboard() {
                 </span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleDownloadReceipt}
-                className="w-full py-2.5 rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] text-xs font-bold text-[#1C1E21] dark:text-[#F3F4F6] hover:bg-slate-50 dark:hover:bg-[#121316] flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {receiptDownloaded ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    <span>Boleta {subscription?.receiptNumber || 'B001-004821'} descargada</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4 text-[#008B8B]" />
-                    <span>Descargar Boleta Electrónica (RUC 20608945123)</span>
-                  </>
-                )}
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadReceipt}
+                  className="py-2.5 px-3 rounded-xl border border-[#008B8B] text-xs font-bold text-[#008B8B] dark:text-[#14B8A6] hover:bg-[#008B8B]/5 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {receiptDownloaded ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>PDF descargado</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 shrink-0" />
+                      <span>Descargar PDF</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isResendingEmail}
+                  onClick={handleResendVenueReceipt}
+                  className="py-2.5 px-3 rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] text-xs font-bold text-[#1C1E21] dark:text-[#F3F4F6] hover:bg-slate-50 dark:hover:bg-[#121316] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                >
+                  <Mail className={`w-4 h-4 text-[#008B8B] shrink-0 ${isResendingEmail ? 'animate-pulse' : ''}`} />
+                  <span>{isResendingEmail ? 'Enviando...' : 'Enviar a Gmail'}</span>
+                </button>
+              </div>
             </div>
 
             {/* Simulator for testing status transitions */}

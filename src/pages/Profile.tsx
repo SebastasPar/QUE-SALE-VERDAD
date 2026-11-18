@@ -40,7 +40,9 @@ import {
   RefreshCw,
   FileText,
   Phone,
+  Mail,
 } from 'lucide-react';
+import { sendReceiptEmailWithPdf, downloadReceiptPdf, SendReceiptPayload } from '../utils/receiptPdf';
 import { useWalletStore } from '../store/walletStore';
 import { useLocationStore } from '../store/locationStore';
 import { RechargeModal } from '../components/wallet/RechargeModal';
@@ -58,6 +60,10 @@ export default function Profile() {
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [isRenewingSub, setIsRenewingSub] = useState(false);
   const [receiptDownloaded, setReceiptDownloaded] = useState(false);
+  const [venueReceiptEmail, setVenueReceiptEmail] = useState(currentUser?.email || '');
+  const [isResendingVenueEmail, setIsResendingVenueEmail] = useState(false);
+  const [venueEmailNotice, setVenueEmailNotice] = useState<{ mode: 'live' | 'simulated' | 'resend_error'; text: string } | null>(null);
+  const [venuePdfBase64, setVenuePdfBase64] = useState<string | undefined>(undefined);
   const { 
     isGeolocationEnabled, 
     status: geoStatus, 
@@ -118,26 +124,112 @@ export default function Profile() {
     setIsEditingProfile(false);
   };
 
+  const buildVenueReceiptPayload = (overrides?: Partial<SendReceiptPayload>): SendReceiptPayload => {
+    const branches = venueDetails?.branchesCount || 1;
+    const targetEmail = (venueReceiptEmail || currentUser?.email || 'aliados@quesale.pe').trim();
+    const targetPlanName = overrides?.planName || subscription?.planName || (branches > 1 ? 'Plan Multisede' : 'Plan Sede Única');
+    const targetPrice = overrides?.totalSoles ?? subscription?.monthlyPricePen ?? (branches > 1 ? 179 : 99);
+    const targetReceipt = overrides?.receiptNumber || subscription?.receiptNumber || 'B001-004821';
+    const targetRenew = overrides?.renewsAt || subscription?.renewsAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    return {
+      receiptType: 'venue',
+      receiptNumber: targetReceipt,
+      customerEmail: targetEmail,
+      customerName: venueDetails?.businessName || currentUser?.name || 'Local Aliado',
+      totalSoles: targetPrice,
+      businessName: venueDetails?.businessName || currentUser?.name || 'Local Aliado',
+      ruc: venueDetails?.ruc || '20600000001',
+      branchesCount: branches,
+      planName: targetPlanName,
+      renewsAt: targetRenew,
+      address: venueDetails?.address || 'Lima, Perú',
+      paymentMethod: subscription?.paymentMethod || 'yape',
+      issuedAt: overrides?.issuedAt || subscription?.activatedAt || new Date().toISOString(),
+    };
+  };
+
   const handleRenewVenueSub = async (targetPlanId?: 'single' | 'multi') => {
+    const targetEmail = (venueReceiptEmail || currentUser?.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setVenueEmailNotice({
+        mode: 'resend_error',
+        text: 'Ingresa un correo Gmail válido para enviar tu boleta en PDF.',
+      });
+      return;
+    }
+
     setIsRenewingSub(true);
+    setVenueEmailNotice(null);
     await new Promise((resolve) => setTimeout(resolve, 750));
     const planId = targetPlanId || subscription?.planId || ((venueDetails?.branchesCount || 1) > 1 ? 'multi' : 'single');
     const isMulti = planId === 'multi';
+    const planName = isMulti ? 'Plan Multisede' : 'Plan Sede Única';
+    const monthlyPricePen = isMulti ? 179 : 99;
     const now = new Date();
     const renewsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const receiptNumber = `B001-${String(Math.floor(100000 + Math.random() * 899999))}`;
+
     updateSubscription({
       status: 'active',
       planId,
-      planName: isMulti ? 'Plan Multisede' : 'Plan Sede Única',
-      monthlyPricePen: isMulti ? 179 : 99,
+      planName,
+      monthlyPricePen,
       activatedAt: now.toISOString(),
       renewsAt: renewsAt.toISOString(),
-      receiptNumber: `B001-${String(Math.floor(100000 + Math.random() * 899999))}`,
+      receiptNumber,
+    });
+
+    const payload = buildVenueReceiptPayload({
+      receiptNumber,
+      planName,
+      totalSoles: monthlyPricePen,
+      renewsAt: renewsAt.toISOString(),
+      issuedAt: now.toISOString(),
+    });
+    const res = await sendReceiptEmailWithPdf(payload);
+    if (res.pdfBase64) setVenuePdfBase64(res.pdfBase64);
+
+    setVenueEmailNotice({
+      mode: res.mode,
+      text:
+        res.mode === 'live'
+          ? `Boleta PDF ${receiptNumber} enviada a ${targetEmail}`
+          : res.mode === 'simulated'
+            ? `Boleta PDF ${receiptNumber} generada para ${targetEmail} (modo demo)`
+            : res.error || 'Suscripción renovada, pero falló el envío de correo.',
     });
     setIsRenewingSub(false);
   };
 
+  const handleResendVenueEmail = async () => {
+    const targetEmail = (venueReceiptEmail || currentUser?.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setVenueEmailNotice({
+        mode: 'resend_error',
+        text: 'Ingresa un correo Gmail válido para reenviar la boleta PDF.',
+      });
+      return;
+    }
+    setIsResendingVenueEmail(true);
+    setVenueEmailNotice(null);
+    const payload = buildVenueReceiptPayload();
+    const res = await sendReceiptEmailWithPdf(payload);
+    if (res.pdfBase64) setVenuePdfBase64(res.pdfBase64);
+    setVenueEmailNotice({
+      mode: res.mode,
+      text:
+        res.mode === 'live'
+          ? `Boleta PDF ${payload.receiptNumber} reenviada a ${targetEmail}`
+          : res.mode === 'simulated'
+            ? `Copia PDF generada para ${targetEmail} (modo demo)`
+            : res.error || 'Error al reenviar la boleta PDF.',
+    });
+    setIsResendingVenueEmail(false);
+  };
+
   const handleDownloadVenueReceipt = () => {
+    downloadReceiptPdf(buildVenueReceiptPayload(), venuePdfBase64);
     setReceiptDownloaded(true);
     setTimeout(() => setReceiptDownloaded(false), 3000);
   };
@@ -938,18 +1030,55 @@ export default function Profile() {
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleDownloadVenueReceipt}
-                className="w-full py-2.5 rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] text-xs font-bold text-[#1C1E21] dark:text-[#F3F4F6] flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#121316]"
-              >
-                <Download className="w-4 h-4 text-[#008B8B]" />
-                <span>
-                  {receiptDownloaded
-                    ? `Comprobante ${subscription?.receiptNumber || 'B001-004821'} descargado`
-                    : `Descargar Boleta Electrónica (${subscription?.receiptNumber || 'B001-004821'})`}
-                </span>
-              </button>
+              <div className="pt-2 space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF]">
+                  Gmail para recibir Boleta PDF
+                </label>
+                <input
+                  type="email"
+                  value={venueReceiptEmail}
+                  onChange={(e) => setVenueReceiptEmail(e.target.value)}
+                  placeholder="tulocal@gmail.com"
+                  className="w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-[#EFEFF1]/50 dark:bg-[#121316] px-3.5 py-2 text-xs font-semibold text-[#1C1E21] dark:text-[#F3F4F6] focus:outline-none focus:border-[#008B8B]"
+                />
+              </div>
+
+              {venueEmailNotice && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-semibold border ${
+                    venueEmailNotice.mode === 'resend_error'
+                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                      : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                  }`}
+                >
+                  {venueEmailNotice.text}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleDownloadVenueReceipt}
+                  className="w-full py-2.5 rounded-xl border border-[#008B8B] text-xs font-bold text-[#008B8B] dark:text-[#14B8A6] flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#008B8B]/5"
+                >
+                  <Download className="w-4 h-4 shrink-0" />
+                  <span>
+                    {receiptDownloaded
+                      ? `PDF ${subscription?.receiptNumber || 'B001-004821'} descargado`
+                      : `Descargar Boleta PDF (${subscription?.receiptNumber || 'B001-004821'})`}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isResendingVenueEmail}
+                  onClick={handleResendVenueEmail}
+                  className="w-full py-2.5 rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] text-xs font-bold text-[#1C1E21] dark:text-[#F3F4F6] flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#121316] disabled:opacity-60"
+                >
+                  <Mail className={`w-4 h-4 text-[#008B8B] shrink-0 ${isResendingVenueEmail ? 'animate-pulse' : ''}`} />
+                  <span>{isResendingVenueEmail ? 'Enviando...' : 'Reenviar Boleta PDF a Gmail'}</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

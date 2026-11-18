@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useWalletStore, PaymentReceipt } from '../../store/walletStore';
 import { useAuthStore } from '../../store/authStore';
+import { sendReceiptEmailWithPdf, downloadReceiptPdf } from '../../utils/receiptPdf';
 
 interface RechargeModalProps {
   isOpen: boolean;
@@ -86,6 +87,7 @@ export function RechargeModal({
   );
   const [emailDeliveryMode, setEmailDeliveryMode] = useState<'live' | 'simulated' | 'resend_error' | null>(null);
   const [emailErrorMessage, setEmailErrorMessage] = useState<string | null>(null);
+  const [latestPdfBase64, setLatestPdfBase64] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (user?.email) {
@@ -108,51 +110,27 @@ export function RechargeModal({
     targetEmail: string,
     reference?: string
   ): Promise<'live' | 'simulated' | 'resend_error'> => {
-    try {
-      const response = await fetch('/api/send-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receiptNumber: receipt.receiptNumber,
-          customerEmail: targetEmail,
-          totalSoles: receipt.totalSoles,
-          igvSoles: receipt.igvSoles,
-          subtotalSoles: receipt.subtotalSoles,
-          coinsAcquired: receipt.coinsAcquired,
-          paymentMethod: receipt.paymentMethod,
-          issuedAt: receipt.issuedAt,
-          reference,
-        }),
-      });
+    const result = await sendReceiptEmailWithPdf({
+      receiptType: 'user',
+      receiptNumber: receipt.receiptNumber,
+      customerEmail: targetEmail,
+      customerName: user?.name || 'Usuario ¿Qué Sale?',
+      totalSoles: receipt.totalSoles,
+      igvSoles: receipt.igvSoles,
+      subtotalSoles: receipt.subtotalSoles,
+      coinsAcquired: receipt.coinsAcquired,
+      paymentMethod: receipt.paymentMethod,
+      issuedAt: receipt.issuedAt,
+      reference,
+    });
 
-      const data = await response.json();
-      if (!response.ok) {
-        const msg = data?.error || 'No se pudo enviar la boleta al correo.';
-        setEmailDeliveryMode('resend_error');
-        setEmailErrorMessage(msg);
-        return 'resend_error';
-      }
-
-      if (data.mode === 'live' && data.ok) {
-        setEmailDeliveryMode('live');
-        setEmailErrorMessage(null);
-        return 'live';
-      }
-
-      if (data.mode === 'simulated') {
-        setEmailDeliveryMode('simulated');
-        setEmailErrorMessage(null);
-        return 'simulated';
-      }
-
-      setEmailDeliveryMode('resend_error');
-      setEmailErrorMessage(data?.error || 'Error al despachar el correo con Resend.');
-      return 'resend_error';
-    } catch (err: any) {
-      setEmailDeliveryMode('resend_error');
-      setEmailErrorMessage(err?.message || 'Error de conexión al intentar enviar el comprobante.');
-      return 'resend_error';
+    if (result.pdfBase64) {
+      setLatestPdfBase64(result.pdfBase64);
     }
+
+    setEmailDeliveryMode(result.mode);
+    setEmailErrorMessage(result.mode === 'resend_error' ? (result.error || 'Error al enviar la boleta al correo.') : null);
+    return result.mode;
   };
 
   const handleProcessPayment = async () => {
@@ -222,43 +200,26 @@ export function RechargeModal({
     setIsDownloading(true);
     setTimeout(() => {
       try {
-        const receiptContent = [
-          '====================================================',
-          '              ¿QUÉ SALE? PERÚ S.A.C.                ',
-          '                 RUC: 20608945123                   ',
-          '           BOLETA DE VENTA ELECTRÓNICA              ',
-          `                SERIE: ${activeReceipt.receiptNumber}               `,
-          '====================================================',
-          `Fecha de Emisión : ${new Date(activeReceipt.issuedAt).toLocaleString('es-PE')}`,
-          `Cliente (Correo) : ${activeReceipt.customerEmail}`,
-          `Pasarela de Pago : Procesado y protegido por Culqi / Credicorp`,
-          `Método de Pago   : ${methodDisplayName}`,
-          '----------------------------------------------------',
-          'DESCRIPCIÓN                                  IMPORTE',
-          `Paquete de ${activeReceipt.coinsAcquired} SaleCoins (B2C Wallet)       S/ ${activeReceipt.totalSoles.toFixed(2)}`,
-          '----------------------------------------------------',
-          `OP. GRAVADA (82%)                        S/ ${activeReceipt.subtotalSoles.toFixed(2)}`,
-          `I.G.V. (18%)                             S/ ${activeReceipt.igvSoles.toFixed(2)}`,
-          `IMPORTE TOTAL                            S/ ${activeReceipt.totalSoles.toFixed(2)}`,
-          '====================================================',
-          'Representación impresa de la Boleta de Venta Electrónica.',
-          'Autorizado mediante resolución de intendencia SUNAT.',
-        ].join('\n');
-
-        const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Boleta_${activeReceipt.receiptNumber}.txt`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        downloadReceiptPdf(
+          {
+            receiptType: 'user',
+            receiptNumber: activeReceipt.receiptNumber,
+            customerEmail: activeReceipt.customerEmail,
+            customerName: user?.name || 'Usuario ¿Qué Sale?',
+            totalSoles: activeReceipt.totalSoles,
+            igvSoles: activeReceipt.igvSoles,
+            subtotalSoles: activeReceipt.subtotalSoles,
+            coinsAcquired: activeReceipt.coinsAcquired,
+            paymentMethod: activeReceipt.paymentMethod,
+            issuedAt: activeReceipt.issuedAt,
+          },
+          latestPdfBase64
+        );
       } catch {}
       setIsDownloading(false);
       setDownloadedSuccess(true);
       setTimeout(() => setDownloadedSuccess(false), 3500);
-    }, 450);
+    }, 300);
   };
 
   const handleResendEmail = async () => {
@@ -939,10 +900,10 @@ export function RechargeModal({
                 {isDownloading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Generando boleta...</span>
+                    <span>Generando PDF...</span>
                   </>
                 ) : (
-                  <span>{downloadedSuccess ? '✅ Boleta descargada' : '📄 Descargar Boleta'}</span>
+                  <span>{downloadedSuccess ? '✅ Boleta PDF descargada' : '📄 Descargar Boleta PDF'}</span>
                 )}
               </button>
 

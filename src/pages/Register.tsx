@@ -23,9 +23,12 @@ import {
   MapPin,
   Phone,
   FileText,
+  Mail,
+  AlertTriangle,
 } from 'lucide-react';
 import { TermsAndConditionsModal } from '../components/shared/TermsAndConditionsModal';
 import { setUserJoinedIds } from '../hooks/useActivities';
+import { sendReceiptEmailWithPdf } from '../utils/receiptPdf';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
@@ -73,7 +76,9 @@ export default function Register() {
   // Venue flow state
   const [venueDraft, setVenueDraft] = useState<VenueRegisterFormValues | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<'single' | 'multi'>('single');
-  const [paymentMethod, setPaymentMethod] = useState<'yape' | 'card'>('yape');
+  const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'card'>('yape');
+  const [venueReceiptEmail, setVenueReceiptEmail] = useState<string>('');
+  const [subPaymentError, setSubPaymentError] = useState<string | null>(null);
   const [isActivatingSub, setIsActivatingSub] = useState(false);
 
   const {
@@ -136,11 +141,20 @@ export default function Register() {
   const onSubmitVenueDetails = (data: VenueRegisterFormValues) => {
     setVenueDraft(data);
     setSelectedPlanId(data.branchesCount > 1 ? 'multi' : 'single');
+    setVenueReceiptEmail(data.email.trim());
+    setSubPaymentError(null);
     setStep('venue-subscription');
   };
 
   const handleActivateVenueSubscription = async () => {
     if (!venueDraft) return;
+    const targetEmail = (venueReceiptEmail || venueDraft.email).trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setSubPaymentError('Ingresa un correo Gmail / electrónico válido para enviarte la boleta en PDF.');
+      return;
+    }
+
+    setSubPaymentError(null);
     setIsActivatingSub(true);
     await new Promise((resolve) => setTimeout(resolve, 900));
 
@@ -148,7 +162,25 @@ export default function Register() {
     const renews = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const receiptNumber = `B001-${String(Math.floor(100000 + Math.random() * 899999))}`;
     const isMulti = selectedPlanId === 'multi';
+    const monthlyPricePen = isMulti ? 179 : 99;
+    const planName = isMulti ? 'Plan Multisede' : 'Plan Sede Única';
     const newVenueId = `venue-${Date.now()}`;
+
+    await sendReceiptEmailWithPdf({
+      receiptType: 'venue',
+      receiptNumber,
+      customerEmail: targetEmail,
+      customerName: venueDraft.businessName.trim(),
+      totalSoles: monthlyPricePen,
+      businessName: venueDraft.businessName.trim(),
+      ruc: venueDraft.ruc.trim(),
+      branchesCount: Number(venueDraft.branchesCount),
+      planName,
+      renewsAt: renews.toISOString(),
+      address: venueDraft.address.trim(),
+      paymentMethod,
+      issuedAt: now.toISOString(),
+    });
 
     login(
       'venue-auth-token-active',
@@ -172,12 +204,12 @@ export default function Register() {
         subscription: {
           status: 'active',
           planId: selectedPlanId,
-          planName: isMulti ? 'Plan Multisede' : 'Plan Sede Única',
-          monthlyPricePen: isMulti ? 179 : 99,
+          planName,
+          monthlyPricePen,
           activatedAt: now.toISOString(),
           renewsAt: renews.toISOString(),
           receiptNumber,
-          paymentMethod: paymentMethod === 'yape' ? 'yape' : 'card',
+          paymentMethod,
         },
       },
       true
@@ -989,45 +1021,78 @@ export default function Register() {
             </div>
 
             {/* Culqi Payment Method */}
-            <div className="mb-6">
+            <div className="mb-5">
               <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-2">
                 Método de Pago Mensual (Culqi)
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2.5">
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('yape')}
-                  className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
+                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 text-left transition-all cursor-pointer ${
                     paymentMethod === 'yape'
                       ? 'border-[#008B8B] bg-[#008B8B]/10 text-[#1C1E21] dark:text-white'
                       : 'border-[#DDE1E5] dark:border-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF]'
                   }`}
                 >
                   <Smartphone className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                  <div>
-                    <p className="text-xs font-black">Yape / Plin</p>
-                    <p className="text-[10px] opacity-80">Activación al instante</p>
-                  </div>
+                  <p className="text-xs font-black">Yape</p>
+                  <p className="text-[10px] opacity-80">Instantáneo</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('plin')}
+                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 text-left transition-all cursor-pointer ${
+                    paymentMethod === 'plin'
+                      ? 'border-[#008B8B] bg-[#008B8B]/10 text-[#1C1E21] dark:text-white'
+                      : 'border-[#DDE1E5] dark:border-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF]'
+                  }`}
+                >
+                  <Smartphone className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
+                  <p className="text-xs font-black">Plin</p>
+                  <p className="text-[10px] opacity-80">QR / Móvil</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('card')}
-                  className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
+                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 text-left transition-all cursor-pointer ${
                     paymentMethod === 'card'
                       ? 'border-[#008B8B] bg-[#008B8B]/10 text-[#1C1E21] dark:text-white'
                       : 'border-[#DDE1E5] dark:border-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF]'
                   }`}
                 >
                   <CreditCard className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                  <div>
-                    <p className="text-xs font-black">Tarjeta Emp. / Débito</p>
-                    <p className="text-[10px] opacity-80">Renovación mensual</p>
-                  </div>
+                  <p className="text-xs font-black">Tarjeta</p>
+                  <p className="text-[10px] opacity-80">Débito / Créd.</p>
                 </button>
               </div>
-              <p className="mt-2.5 text-[11px] text-[#65676B] dark:text-[#9CA3AF] flex items-center gap-1.5">
+            </div>
+
+            {/* Gmail destination for PDF receipt */}
+            <div className="mb-6">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1.5 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6]" />
+                <span>Correo Gmail para recibir Boleta en PDF</span>
+              </label>
+              <input
+                type="email"
+                value={venueReceiptEmail}
+                onChange={(e) => {
+                  setVenueReceiptEmail(e.target.value);
+                  if (subPaymentError) setSubPaymentError(null);
+                }}
+                placeholder="tulocal@gmail.com"
+                className="block w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] px-3.5 py-2.5 text-sm text-[#1C1E21] dark:text-[#F3F4F6] focus:border-[#008B8B] focus:outline-none focus:ring-2 focus:ring-[#008B8B]/20"
+              />
+              {subPaymentError && (
+                <p className="mt-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{subPaymentError}</span>
+                </p>
+              )}
+              <p className="mt-2 text-[11px] text-[#65676B] dark:text-[#9CA3AF] flex items-center gap-1.5">
                 <Receipt className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                <span>Emisión automática de Boleta/Factura Electrónica (Serie B001 • RUC 20608945123).</span>
+                <span>Enviaremos automáticamente tu Boleta en PDF (Serie B001 • RUC 20608945123) a este Gmail.</span>
               </p>
             </div>
 
