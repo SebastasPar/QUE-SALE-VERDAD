@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, 
@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   Loader2,
   RefreshCw,
-  Lock
+  Lock,
+  Mail,
+  AlertTriangle
 } from 'lucide-react';
 import { useWalletStore, PaymentReceipt } from '../../store/walletStore';
 import { useAuthStore } from '../../store/authStore';
@@ -79,6 +81,17 @@ export function RechargeModal({
     expiry: '08/28',
     cvv: '•••',
   });
+  const [recipientEmail, setRecipientEmail] = useState<string>(
+    user?.email || lastReceipt?.customerEmail || 'santiago.lima@quesale.pe'
+  );
+  const [emailDeliveryMode, setEmailDeliveryMode] = useState<'live' | 'simulated' | 'resend_error' | null>(null);
+  const [emailErrorMessage, setEmailErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.email) {
+      setRecipientEmail(user.email);
+    }
+  }, [user?.email]);
 
   if (!isOpen) return null;
 
@@ -90,23 +103,89 @@ export function RechargeModal({
     setTimeout(() => setCopiedPhone(false), 2000);
   };
 
-  const handleProcessPayment = () => {
+  const sendReceiptEmail = async (
+    receipt: PaymentReceipt,
+    targetEmail: string,
+    reference?: string
+  ): Promise<'live' | 'simulated' | 'resend_error'> => {
+    try {
+      const response = await fetch('/api/send-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiptNumber: receipt.receiptNumber,
+          customerEmail: targetEmail,
+          totalSoles: receipt.totalSoles,
+          igvSoles: receipt.igvSoles,
+          subtotalSoles: receipt.subtotalSoles,
+          coinsAcquired: receipt.coinsAcquired,
+          paymentMethod: receipt.paymentMethod,
+          issuedAt: receipt.issuedAt,
+          reference,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        const msg = data?.error || 'No se pudo enviar la boleta al correo.';
+        setEmailDeliveryMode('resend_error');
+        setEmailErrorMessage(msg);
+        return 'resend_error';
+      }
+
+      if (data.mode === 'live' && data.ok) {
+        setEmailDeliveryMode('live');
+        setEmailErrorMessage(null);
+        return 'live';
+      }
+
+      if (data.mode === 'simulated') {
+        setEmailDeliveryMode('simulated');
+        setEmailErrorMessage(null);
+        return 'simulated';
+      }
+
+      setEmailDeliveryMode('resend_error');
+      setEmailErrorMessage(data?.error || 'Error al despachar el correo con Resend.');
+      return 'resend_error';
+    } catch (err: any) {
+      setEmailDeliveryMode('resend_error');
+      setEmailErrorMessage(err?.message || 'Error de conexión al intentar enviar el comprobante.');
+      return 'resend_error';
+    }
+  };
+
+  const handleProcessPayment = async () => {
+    const targetEmail = recipientEmail.trim() || userEmail;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setEmailErrorMessage('Ingresa un correo electrónico válido para recibir tu boleta.');
+      return;
+    }
+
     setIsProcessing(true);
     setDownloadedSuccess(false);
     setResentSuccess(false);
-    setTimeout(() => {
-      const generatedRef = `REC-${Math.floor(100000 + Math.random() * 900000)}`;
-      const receipt = rechargeCoins(
-        selectedPkg.soles,
-        selectedPkg.coins,
-        selectedMethod,
-        generatedRef,
-        user?.email
-      );
-      setCurrentReceipt(receipt);
-      setIsProcessing(false);
-      setStep('success');
-    }, 1000);
+    setEmailErrorMessage(null);
+
+    const generatedRef = approvalCode.trim() || `REC-${Math.floor(100000 + Math.random() * 900000)}`;
+    const receipt = rechargeCoins(
+      selectedPkg.soles,
+      selectedPkg.coins,
+      selectedMethod,
+      generatedRef,
+      targetEmail
+    );
+
+    const mode = await sendReceiptEmail(receipt, targetEmail, generatedRef);
+    const updatedReceipt: PaymentReceipt = {
+      ...receipt,
+      customerEmail: targetEmail,
+      emailStatus: mode === 'live' ? 'sent' : mode === 'simulated' ? 'simulated' : 'failed',
+    };
+
+    setCurrentReceipt(updatedReceipt);
+    setIsProcessing(false);
+    setStep('success');
   };
 
   const handleResetAndClose = () => {
@@ -114,12 +193,14 @@ export function RechargeModal({
     setIsProcessing(false);
     setDownloadedSuccess(false);
     setResentSuccess(false);
+    setEmailDeliveryMode(null);
+    setEmailErrorMessage(null);
     onClose();
   };
 
   const activeReceipt: PaymentReceipt = currentReceipt || lastReceipt || {
     receiptNumber: 'B001-0048291',
-    customerEmail: userEmail,
+    customerEmail: recipientEmail.trim() || userEmail,
     totalSoles: Number(selectedPkg.soles.toFixed(2)),
     igvSoles: Number((selectedPkg.soles * 0.18).toFixed(2)),
     subtotalSoles: Number((selectedPkg.soles * 0.82).toFixed(2)),
@@ -180,15 +261,31 @@ export function RechargeModal({
     }, 450);
   };
 
-  const handleResendEmail = () => {
+  const handleResendEmail = async () => {
     if (isResending) return;
+    const targetEmail = recipientEmail.trim() || activeReceipt.customerEmail;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setEmailDeliveryMode('resend_error');
+      setEmailErrorMessage('Ingresa un correo electrónico válido para reenviar la boleta.');
+      return;
+    }
+
     setIsResending(true);
     setResentSuccess(false);
-    setTimeout(() => {
-      setIsResending(false);
+    setEmailErrorMessage(null);
+
+    const mode = await sendReceiptEmail(activeReceipt, targetEmail);
+    setCurrentReceipt({
+      ...activeReceipt,
+      customerEmail: targetEmail,
+      emailStatus: mode === 'live' ? 'sent' : mode === 'simulated' ? 'simulated' : 'failed',
+    });
+
+    setIsResending(false);
+    if (mode === 'live' || mode === 'simulated') {
       setResentSuccess(true);
       setTimeout(() => setResentSuccess(false), 4000);
-    }, 700);
+    }
   };
 
   const modalElement = (
@@ -541,7 +638,7 @@ export function RechargeModal({
                     className="w-full px-4 py-3 rounded-2xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] text-sm font-mono placeholder-[#65676B]/60 focus:outline-none focus:ring-2 focus:ring-[#008B8B] dark:focus:ring-[#14B8A6]"
                   />
                   <p className="text-[11px] text-[#65676B] dark:text-[#9CA3AF] mt-1">
-                    Procesado y protegido por Culqi / Credicorp. La boleta electrónica se enviará a <strong>{userEmail}</strong>.
+                    Procesado y protegido por Culqi / Credicorp. La boleta electrónica se enviará a <strong>{recipientEmail.trim() || userEmail}</strong>.
                   </p>
                 </div>
               </div>
@@ -614,6 +711,32 @@ export function RechargeModal({
               </div>
             )}
 
+            {/* Email for Boleta Electrónica */}
+            <div className="p-5 rounded-3xl bg-white dark:bg-[#1E2025] border border-[#DDE1E5] dark:border-[#2A2D34] shadow-sm space-y-2">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#1C1E21] dark:text-[#F3F4F6] flex items-center gap-2">
+                <Mail className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6]" />
+                <span>Correo electrónico para envío de Boleta Electrónica</span>
+              </label>
+              <input
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => {
+                  setRecipientEmail(e.target.value);
+                  if (emailErrorMessage) setEmailErrorMessage(null);
+                }}
+                placeholder="tucorreo@ejemplo.com"
+                className="w-full px-4 py-3 rounded-2xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] text-sm placeholder-[#65676B]/60 focus:outline-none focus:ring-2 focus:ring-[#008B8B] dark:focus:ring-[#14B8A6]"
+              />
+              {emailErrorMessage && (
+                <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
+                  {emailErrorMessage}
+                </p>
+              )}
+              <p className="text-[11px] text-[#65676B] dark:text-[#9CA3AF]">
+                Enviaremos automáticamente tu Boleta de Venta Electrónica a esta dirección al confirmar el pago.
+              </p>
+            </div>
+
             {/* Confirm Payment CTA */}
             <div className="space-y-3">
               <button
@@ -662,14 +785,43 @@ export function RechargeModal({
               </p>
             </div>
 
-            {/* Highlighted Email Confirmation Banner */}
-            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border-2 border-emerald-300 dark:border-emerald-700/80 text-emerald-900 dark:text-emerald-200 text-xs sm:text-sm font-bold shadow-xs text-left flex items-start gap-2.5">
-              <span className="text-base leading-none shrink-0">✅</span>
-              <span>
-                ¡Pago confirmado! Tu boleta electrónica ya se envió a tu correo:{' '}
-                <strong className="underline decoration-emerald-500">{activeReceipt.customerEmail}</strong>
-              </span>
-            </div>
+            {/* Highlighted Email Confirmation / Delivery Banner */}
+            {emailDeliveryMode === 'resend_error' ? (
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-300 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-semibold shadow-xs text-left flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">
+                    Recarga acreditada, pero no se pudo entregar el correo a{' '}
+                    <span className="underline">{activeReceipt.customerEmail}</span>
+                  </p>
+                  {emailErrorMessage && (
+                    <p className="text-xs opacity-90">{emailErrorMessage}</p>
+                  )}
+                  <p className="text-xs opacity-90">
+                    Puedes corregir el correo abajo y presionar <strong>Reenviar a mi correo</strong>.
+                  </p>
+                </div>
+              </div>
+            ) : emailDeliveryMode === 'simulated' ? (
+              <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border-2 border-teal-300 dark:border-teal-700/80 text-teal-900 dark:text-teal-200 text-xs sm:text-sm font-semibold shadow-xs text-left flex items-start gap-2.5">
+                <span className="text-base leading-none shrink-0">📄</span>
+                <span>
+                  ¡Pago confirmado! Boleta emitida para{' '}
+                  <strong className="underline decoration-teal-500">{activeReceipt.customerEmail}</strong>{' '}
+                  <span className="text-xs font-normal opacity-85">
+                    (Modo demostración: configura <code className="font-mono">RESEND_API_KEY</code> en Vercel para despacho real).
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border-2 border-emerald-300 dark:border-emerald-700/80 text-emerald-900 dark:text-emerald-200 text-xs sm:text-sm font-bold shadow-xs text-left flex items-start gap-2.5">
+                <span className="text-base leading-none shrink-0">✅</span>
+                <span>
+                  ¡Pago confirmado! Tu boleta electrónica ya fue enviada vía Resend a{' '}
+                  <strong className="underline decoration-emerald-500">{activeReceipt.customerEmail}</strong>
+                </span>
+              </div>
+            )}
 
             {/* Official Electronic Receipt Card (Boleta de Venta Electrónica) */}
             <div className="rounded-3xl bg-white dark:bg-[#1E2025] border-2 border-[#DDE1E5] dark:border-[#2A2D34] text-left shadow-md overflow-hidden">
@@ -761,6 +913,21 @@ export function RechargeModal({
               </div>
             </div>
 
+            {/* Editable Email for Resend */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#1E2025] border border-[#DDE1E5] dark:border-[#2A2D34] text-left space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6]" />
+                <span>Correo destinatario para reenvío</span>
+              </label>
+              <input
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                placeholder="tucorreo@ejemplo.com"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-[#EFEFF1]/50 dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#008B8B] dark:focus:ring-[#14B8A6]"
+              />
+            </div>
+
             {/* Interactive Receipt Actions: Download & Resend */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
@@ -798,7 +965,9 @@ export function RechargeModal({
 
             {resentSuccess && (
               <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 animate-in fade-in">
-                Se envió una nueva copia de la boleta {activeReceipt.receiptNumber} a {activeReceipt.customerEmail}.
+                {emailDeliveryMode === 'live'
+                  ? `Se envió una nueva copia real vía Resend de la boleta ${activeReceipt.receiptNumber} a ${activeReceipt.customerEmail}.`
+                  : `Copia generada (modo demo) de la boleta ${activeReceipt.receiptNumber} para ${activeReceipt.customerEmail}.`}
               </p>
             )}
 

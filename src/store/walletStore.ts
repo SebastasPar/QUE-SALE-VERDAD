@@ -8,7 +8,7 @@ export interface PaymentReceipt {
   subtotalSoles: number; // 82% Base imponible
   coinsAcquired: number;
   gateway: 'culqi';
-  emailStatus: 'sent';
+  emailStatus: 'sent' | 'simulated' | 'failed';
   paymentMethod: 'yape' | 'plin' | 'card';
   issuedAt: string;
 }

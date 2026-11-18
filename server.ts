@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import sendReceiptHandler from "./api/send-receipt";
 
 dotenv.config();
 
@@ -117,6 +118,9 @@ Genera las respuestas inteligentes que sigan este diálogo de forma fluida.
     return res.json({ replies: getOfflineReplies(req.body.planId, req.body.userMessage, req.body.planTitle, req.body.planDescription) });
   }
 });
+
+// API: Send Electronic Receipt via Resend
+app.post("/api/send-receipt", (req, res) => sendReceiptHandler(req, res));
 
 // Offline backup responses
 function getOfflineReplies(planId: string, userMessage: string, planTitle: string = '', planDescription: string = '') {
