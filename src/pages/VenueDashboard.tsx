@@ -11,36 +11,58 @@ import {
   CreditCard,
   CheckCircle2,
   AlertTriangle,
-  Receipt,
   Sparkles,
   Store,
   RefreshCw,
   X,
   Download,
   Mail,
+  Zap,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useActivities, Activity } from '../hooks/useActivities';
+import {
+  useActivities,
+  Activity,
+  MAX_VENUE_PLANS,
+  isActivityBoostActive,
+  useActivateActivityBoost,
+} from '../hooks/useActivities';
 import { BottomNav } from '../components/shared/bottom-nav';
 import { NotificationBell } from '../components/notifications/NotificationBell';
 import { sendReceiptEmailWithPdf, downloadReceiptPdf, SendReceiptPayload } from '../utils/receiptPdf';
+import {
+  VenueMonthlyPlanCard,
+  VenuePaymentMethodFields,
+  VenuePaymentMethod,
+  VenuePaymentFormState,
+  createInitialVenuePaymentForm,
+  validateVenuePaymentForm,
+  toSubscriptionPaymentDetails,
+  formatPaymentDetailsSummary,
+} from '../components/shared/VenueSubscriptionUI';
 
 export default function VenueDashboard() {
   const navigate = useNavigate();
-  const { user, updateSubscription } = useAuthStore();
+  const { user, updateSubscription, cancelSubscription } = useAuthStore();
   const { data: activities, isLoading } = useActivities();
+  const { mutate: activateBoost, isPending: isActivatingBoost } = useActivateActivityBoost();
 
   const [filterMode, setFilterMode] = useState<'active' | 'all'>('active');
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [isRenewing, setIsRenewing] = useState(false);
+  const [boostingPlanId, setBoostingPlanId] = useState<string | null>(null);
+  const [boostNotice, setBoostNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [receiptDownloaded, setReceiptDownloaded] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState(user?.email || '');
-  const [payMethod, setPayMethod] = useState<'yape' | 'plin' | 'card'>(
+  const [payMethod, setPayMethod] = useState<VenuePaymentMethod>(
     user?.subscription?.paymentMethod || 'yape'
+  );
+  const [paymentForm, setPaymentForm] = useState<VenuePaymentFormState>(() =>
+    createInitialVenuePaymentForm(user?.subscription?.paymentDetails)
   );
   const [isResendingEmail, setIsResendingEmail] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState<{
-    mode: 'live' | 'simulated' | 'resend_error';
+    mode: 'live' | 'simulated' | 'resend_error' | 'canceled';
     text: string;
   } | null>(null);
   const [latestPdfBase64, setLatestPdfBase64] = useState<string | undefined>(undefined);
@@ -69,9 +91,31 @@ export default function VenueDashboard() {
   );
 
   const activePlansCount = venuePlans.filter((a) => !a.isCancelled).length;
+  const hasReachedPlanLimit = activePlansCount >= MAX_VENUE_PLANS;
   const totalAttendees = venuePlans
     .filter((a) => !a.isCancelled)
     .reduce((sum, a) => sum + (a.currentAttendees || 0), 0);
+
+  const handleActivateBoost = (planId: string) => {
+    setBoostingPlanId(planId);
+    setBoostNotice(null);
+    activateBoost(planId, {
+      onSuccess: () => {
+        setBoostNotice({
+          type: 'success',
+          text: '⚡ Boost de 3 horas activado. Tu plan ahora aparece primero en el Feed.',
+        });
+        setBoostingPlanId(null);
+      },
+      onError: (err) => {
+        setBoostNotice({
+          type: 'error',
+          text: err instanceof Error ? err.message : 'No se pudo activar el boost.',
+        });
+        setBoostingPlanId(null);
+      },
+    });
+  };
 
   const formatRenewDate = (iso?: string) => {
     if (!iso) return 'Próximo mes';
@@ -96,8 +140,8 @@ export default function VenueDashboard() {
 
   const buildVenueReceiptPayload = (overrides?: Partial<SendReceiptPayload>): SendReceiptPayload => {
     const targetEmail = (receiptEmail || user?.email || 'aliados@quesale.pe').trim();
-    const targetPlanName = overrides?.planName || subscription?.planName || (branchesCount > 1 ? 'Plan Multisede' : 'Plan Sede Única');
-    const targetPrice = overrides?.totalSoles ?? subscription?.monthlyPricePen ?? (branchesCount > 1 ? 179 : 99);
+    const targetPlanName = 'Plan Mensual Empresas';
+    const targetPrice = 99;
     const targetReceipt = overrides?.receiptNumber || subscription?.receiptNumber || 'B001-004821';
     const targetRenew = overrides?.renewsAt || subscription?.renewsAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -114,16 +158,26 @@ export default function VenueDashboard() {
       renewsAt: targetRenew,
       address: venueDetails?.address || 'Lima, Perú',
       paymentMethod: overrides?.paymentMethod || payMethod,
+      paymentDetailsSummary: overrides?.paymentDetailsSummary,
       issuedAt: overrides?.issuedAt || subscription?.activatedAt || new Date().toISOString(),
     };
   };
 
-  const handleRenewSubscription = async (planId?: 'single' | 'multi') => {
+  const handleRenewSubscription = async () => {
+    const paymentError = validateVenuePaymentForm(payMethod, paymentForm);
+    if (paymentError) {
+      setEmailFeedback({
+        mode: 'resend_error',
+        text: paymentError,
+      });
+      return;
+    }
+
     const targetEmail = (receiptEmail || user?.email || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
       setEmailFeedback({
         mode: 'resend_error',
-        text: 'Ingresa un correo Gmail válido para enviar tu boleta de suscripción en PDF.',
+        text: 'Ingresa un correo electrónico válido para enviar tu boleta de suscripción en PDF.',
       });
       return;
     }
@@ -131,23 +185,27 @@ export default function VenueDashboard() {
     setIsRenewing(true);
     setEmailFeedback(null);
     await new Promise((resolve) => setTimeout(resolve, 750));
-    const targetPlanId = planId || subscription?.planId || (branchesCount > 1 ? 'multi' : 'single');
-    const isMulti = targetPlanId === 'multi';
-    const planName = isMulti ? 'Plan Multisede' : 'Plan Sede Única';
-    const monthlyPricePen = isMulti ? 179 : 99;
+    const planName = 'Plan Mensual Empresas';
+    const monthlyPricePen = 99;
     const now = new Date();
     const nextRenewal = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const nextReceipt = `B001-${String(Math.floor(100000 + Math.random() * 899999))}`;
+    const paymentDetails = toSubscriptionPaymentDetails(payMethod, paymentForm);
+    const paymentDetailsSummary = formatPaymentDetailsSummary(payMethod, paymentForm);
 
     updateSubscription({
       status: 'active',
-      planId: targetPlanId,
+      planId: 'single',
       planName,
       monthlyPricePen,
       activatedAt: now.toISOString(),
       renewsAt: nextRenewal.toISOString(),
       receiptNumber: nextReceipt,
       paymentMethod: payMethod,
+      paymentDetails,
+      maxPlansPerMonth: 8,
+      boostDurationHours: 3,
+      priorityRadiusKm: 5,
     });
 
     const payload = buildVenueReceiptPayload({
@@ -157,6 +215,7 @@ export default function VenueDashboard() {
       renewsAt: nextRenewal.toISOString(),
       issuedAt: now.toISOString(),
       paymentMethod: payMethod,
+      paymentDetailsSummary,
     });
 
     const res = await sendReceiptEmailWithPdf(payload);
@@ -166,13 +225,21 @@ export default function VenueDashboard() {
       mode: res.mode,
       text:
         res.mode === 'live'
-          ? `Boleta PDF ${nextReceipt} enviada a ${targetEmail}`
+          ? `Suscripción renovada. Boleta PDF ${nextReceipt} enviada a ${targetEmail}`
           : res.mode === 'simulated'
-            ? `Boleta PDF ${nextReceipt} generada para ${targetEmail} (modo demo)`
+            ? `Suscripción renovada. Boleta PDF ${nextReceipt} generada para ${targetEmail} (modo demo)`
             : res.error || 'Pago aplicado, pero no se pudo entregar el correo. Usa Reenviar.',
     });
 
     setIsRenewing(false);
+  };
+
+  const handleCancelSubscription = () => {
+    cancelSubscription();
+    setEmailFeedback({
+      mode: 'canceled',
+      text: 'Tu suscripción mensual ha sido anulada. Puedes renovarla cuando desees volver a publicar planes.',
+    });
   };
 
   const handleResendVenueReceipt = async () => {
@@ -287,19 +354,18 @@ export default function VenueDashboard() {
                   )}
                 </span>
                 <span className="text-xs font-bold text-white/90">
-                  {subscription?.planName || 'Plan Sede Única'} • S/ {subscription?.monthlyPricePen || 99}/mes
+                  Plan Mensual Empresas • S/ 99/mes
                 </span>
               </div>
 
               <p className="text-sm font-bold text-white/95">
                 {isSubActive
                   ? `Próxima renovación: ${formatRenewDate(subscription?.renewsAt)}`
-                  : 'Renueva tu suscripción mensual para volver a publicar nuevos planes grupales.'}
+                  : 'Tu suscripción está inactiva. Renuévala para volver a publicar planes grupales.'}
               </p>
 
-              <p className="text-[11px] text-white/85 leading-relaxed">
-                Sin SaleCoins: Como local aliado publicas planes directamente con tu suscripción mensual y{' '}
-                <strong>no ocupas cupo</strong> en las salidas.
+              <p className="text-[11px] text-white/90 leading-relaxed font-medium">
+                Máximo {MAX_VENUE_PLANS} planes • 1 boost de 3h por plan • Prioridad 5 km • Chat directo
               </p>
             </div>
 
@@ -322,7 +388,7 @@ export default function VenueDashboard() {
               Planes Activos
             </p>
             <p className="text-2xl font-black text-[#008B8B] dark:text-[#14B8A6] mt-1">
-              {activePlansCount}
+              {activePlansCount} / {MAX_VENUE_PLANS}
             </p>
           </div>
           <div className="bg-white dark:bg-[#1E2025] rounded-2xl p-3.5 border border-[#DDE1E5] dark:border-[#2A2D34] text-center shadow-2xs">
@@ -347,12 +413,29 @@ export default function VenueDashboard() {
         <button
           type="button"
           id="venue-create-plan-cta"
+          disabled={isSubActive && hasReachedPlanLimit}
           onClick={handleCreatePlanClick}
-          className="w-full py-4 px-5 rounded-2xl bg-[#FF5733] hover:bg-[#E04826] dark:bg-[#FF6B4A] dark:hover:bg-[#FF5733] text-white font-black text-sm sm:text-base shadow-lg shadow-[#FF5733]/25 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full py-4 px-5 rounded-2xl bg-[#FF5733] hover:bg-[#E04826] dark:bg-[#FF6B4A] dark:hover:bg-[#FF5733] text-white font-black text-sm sm:text-base shadow-lg shadow-[#FF5733]/25 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <Plus className="w-5 h-5 stroke-[3]" />
-          <span>Crear y Publicar Nuevo Plan</span>
+          <span>
+            {isSubActive && hasReachedPlanLimit
+              ? `Límite alcanzado (${activePlansCount}/${MAX_VENUE_PLANS} planes activos)`
+              : `Crear y Publicar Nuevo Plan (${activePlansCount}/${MAX_VENUE_PLANS})`}
+          </span>
         </button>
+
+        {boostNotice && (
+          <div
+            className={`p-3.5 rounded-2xl text-xs font-bold border ${
+              boostNotice.type === 'success'
+                ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300'
+            }`}
+          >
+            {boostNotice.text}
+          </div>
+        )}
 
         {/* Published Plans List */}
         <section className="space-y-4">
@@ -456,6 +539,16 @@ export default function VenueDashboard() {
                               🎁 {plan.discountOffer}
                             </span>
                           )}
+                          {isActivityBoostActive(plan) && (
+                            <span className="px-2.5 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-[#FF5733] text-white text-[10px] font-black">
+                              ⚡ Boost activo (3h)
+                            </span>
+                          )}
+                          {!isActivityBoostActive(plan) && plan.hasUsedBoost && (
+                            <span className="px-2.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black">
+                              Boost utilizado (1/1)
+                            </span>
+                          )}
                         </div>
 
                         <h3 className="text-base font-black text-[#1C1E21] dark:text-[#F3F4F6] leading-snug">
@@ -471,6 +564,31 @@ export default function VenueDashboard() {
                             <MapPin className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
                             <span className="truncate">{plan.location}</span>
                           </span>
+                        </div>
+
+                        {/* Priority & Direct Chat indicators */}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#008B8B]/10 dark:bg-[#14B8A6]/15 text-[#008B8B] dark:text-[#14B8A6]">
+                            📍 Prioridad 5 km
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#EFEFF1] dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] border border-[#DDE1E5] dark:border-[#2A2D34]">
+                            💬 Chat directo
+                          </span>
+                          {!plan.isCancelled && !plan.hasUsedBoost && (
+                            <button
+                              type="button"
+                              disabled={isActivatingBoost && boostingPlanId === plan.id}
+                              onClick={() => handleActivateBoost(plan.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white font-black shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-60"
+                            >
+                              <Zap className="w-3 h-3" />
+                              <span>
+                                {isActivatingBoost && boostingPlanId === plan.id
+                                  ? 'Activando...'
+                                  : '⚡ Activar Boost (3h)'}
+                              </span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -559,19 +677,19 @@ export default function VenueDashboard() {
                       : 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
                   }`}
                 >
-                  {isSubActive ? 'Activa' : subscription?.status === 'past_due' ? 'Por Vencer' : 'Inactiva'}
+                  {isSubActive ? 'Activa' : subscription?.status === 'past_due' ? 'Por Vencer' : 'Anulada'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[#65676B] dark:text-[#9CA3AF] font-semibold">Plan contratado:</span>
                 <span className="font-black text-[#1C1E21] dark:text-[#F3F4F6]">
-                  {subscription?.planName || 'Plan Sede Única'} (S/ {subscription?.monthlyPricePen || 99}/mes)
+                  Plan Mensual Empresas (S/ 99/mes)
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[#65676B] dark:text-[#9CA3AF] font-semibold">Próxima renovación:</span>
                 <span className="font-bold text-[#1C1E21] dark:text-[#F3F4F6]">
-                  {formatRenewDate(subscription?.renewsAt)}
+                  {isSubActive ? formatRenewDate(subscription?.renewsAt) : 'Sin renovación activa'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -582,75 +700,32 @@ export default function VenueDashboard() {
               </div>
             </div>
 
-            {/* Switch / Upgrade plan */}
-            <div className="space-y-2">
-              <p className="text-xs font-black uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF]">
-                Cambiar o Renovar Plan Mensual
-              </p>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  disabled={isRenewing}
-                  onClick={() => handleRenewSubscription('single')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    subscription?.planId === 'single'
-                      ? 'border-[#008B8B] bg-[#008B8B]/10'
-                      : 'border-[#DDE1E5] dark:border-[#2A2D34]'
-                  }`}
-                >
-                  <p className="text-xs font-black">Plan Sede Única</p>
-                  <p className="text-sm font-black text-[#008B8B] dark:text-[#14B8A6]">S/ 99 / mes</p>
-                </button>
-                <button
-                  type="button"
-                  disabled={isRenewing}
-                  onClick={() => handleRenewSubscription('multi')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    subscription?.planId === 'multi'
-                      ? 'border-[#FF5733] bg-[#FF5733]/10'
-                      : 'border-[#DDE1E5] dark:border-[#2A2D34]'
-                  }`}
-                >
-                  <p className="text-xs font-black">Plan Multisede</p>
-                  <p className="text-sm font-black text-[#FF5733] dark:text-[#FF6B4A]">S/ 179 / mes</p>
-                </button>
-              </div>
-            </div>
+            {/* Single Monthly Plan S/ 99 */}
+            <VenueMonthlyPlanCard />
 
-            {/* Payment method + Gmail recipient */}
+            {/* Payment method + instructions + editable fields */}
             <div className="space-y-3">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1.5">
-                  Medio de Pago (Culqi)
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['yape', 'plin', 'card'] as const).map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => setPayMethod(method)}
-                      className={`py-2 px-2.5 rounded-xl border text-xs font-black capitalize cursor-pointer transition-all ${
-                        payMethod === method
-                          ? 'border-[#008B8B] bg-[#008B8B]/10 text-[#008B8B] dark:text-[#14B8A6]'
-                          : 'border-[#DDE1E5] dark:border-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF]'
-                      }`}
-                    >
-                      {method === 'card' ? 'Tarjeta' : method}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <VenuePaymentMethodFields
+                paymentMethod={payMethod}
+                onChangeMethod={setPayMethod}
+                form={paymentForm}
+                onChangeForm={setPaymentForm}
+                onClearError={() => {
+                  if (emailFeedback?.mode === 'resend_error') setEmailFeedback(null);
+                }}
+                label="Medio de Pago"
+              />
 
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1 flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6]" />
-                  <span>Gmail para envío de Boleta PDF</span>
+                  <span>Correo electrónico para envío de Boleta PDF</span>
                 </label>
                 <input
                   type="email"
                   value={receiptEmail}
                   onChange={(e) => setReceiptEmail(e.target.value)}
-                  placeholder="tulocal@gmail.com"
+                  placeholder="tuempresa@correo.com"
                   className="w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-[#EFEFF1]/50 dark:bg-[#121316] px-3.5 py-2 text-xs font-semibold text-[#1C1E21] dark:text-[#F3F4F6] focus:outline-none focus:border-[#008B8B]"
                 />
               </div>
@@ -661,46 +736,57 @@ export default function VenueDashboard() {
                 className={`p-3 rounded-xl text-xs font-semibold border ${
                   emailFeedback.mode === 'resend_error'
                     ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
-                    : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                    : emailFeedback.mode === 'canceled'
+                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                      : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
                 }`}
               >
                 {emailFeedback.text}
               </div>
             )}
 
-            {/* Actions */}
+            {/* Only 2 Subscription State Actions: Renovar suscripción & Anular suscripción */}
             <div className="space-y-2.5">
               <button
                 type="button"
                 disabled={isRenewing}
-                onClick={() => handleRenewSubscription()}
+                onClick={handleRenewSubscription}
                 className="w-full py-3 rounded-2xl bg-[#FF5733] hover:bg-[#E04826] text-white text-xs font-black shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 <RefreshCw className={`w-4 h-4 ${isRenewing ? 'animate-spin' : ''}`} />
                 <span>
-                  {isRenewing
-                    ? 'Procesando renovación Culqi...'
-                    : isSubActive
-                    ? 'Renovar / Extender Suscripción (+30 días)'
-                    : 'Activar Suscripción Mensual Ahora'}
+                  {isRenewing ? 'Procesando renovación...' : 'Renovar suscripción'}
                 </span>
               </button>
 
-              <div className="grid grid-cols-2 gap-2">
+              {isSubActive && (
+                <button
+                  type="button"
+                  disabled={isRenewing}
+                  onClick={handleCancelSubscription}
+                  className="w-full py-2.5 rounded-2xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-950/60 text-rose-700 dark:text-rose-300 text-xs font-black flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Anular suscripción</span>
+                </button>
+              )}
+
+              {/* Receipt utilities */}
+              <div className="pt-2 border-t border-[#DDE1E5] dark:border-[#2A2D34] grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={handleDownloadReceipt}
-                  className="py-2.5 px-3 rounded-xl border border-[#008B8B] text-xs font-bold text-[#008B8B] dark:text-[#14B8A6] hover:bg-[#008B8B]/5 flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="py-2 px-3 rounded-xl border border-[#008B8B] text-[11px] font-bold text-[#008B8B] dark:text-[#14B8A6] hover:bg-[#008B8B]/5 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   {receiptDownloaded ? (
                     <>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       <span>PDF descargado</span>
                     </>
                   ) : (
                     <>
-                      <Download className="w-4 h-4 shrink-0" />
-                      <span>Descargar PDF</span>
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      <span>Descargar boleta</span>
                     </>
                   )}
                 </button>
@@ -709,40 +795,10 @@ export default function VenueDashboard() {
                   type="button"
                   disabled={isResendingEmail}
                   onClick={handleResendVenueReceipt}
-                  className="py-2.5 px-3 rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] text-xs font-bold text-[#1C1E21] dark:text-[#F3F4F6] hover:bg-slate-50 dark:hover:bg-[#121316] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                  className="py-2 px-3 rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] text-[11px] font-bold text-[#1C1E21] dark:text-[#F3F4F6] hover:bg-slate-50 dark:hover:bg-[#121316] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
                 >
-                  <Mail className={`w-4 h-4 text-[#008B8B] shrink-0 ${isResendingEmail ? 'animate-pulse' : ''}`} />
-                  <span>{isResendingEmail ? 'Enviando...' : 'Enviar a Gmail'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Simulator for testing status transitions */}
-            <div className="pt-3 border-t border-[#DDE1E5] dark:border-[#2A2D34]">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-2">
-                Simulador de Estado de Cuenta (Demo)
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => updateSubscription({ status: 'active' })}
-                  className="flex-1 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold border border-emerald-200 dark:border-emerald-800 cursor-pointer"
-                >
-                  Activa
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateSubscription({ status: 'past_due' })}
-                  className="flex-1 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-bold border border-amber-200 dark:border-amber-800 cursor-pointer"
-                >
-                  Por Vencer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateSubscription({ status: 'canceled' })}
-                  className="flex-1 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] font-bold border border-rose-200 dark:border-rose-800 cursor-pointer"
-                >
-                  Inactiva
+                  <Mail className={`w-3.5 h-3.5 text-[#008B8B] shrink-0 ${isResendingEmail ? 'animate-pulse' : ''}`} />
+                  <span>{isResendingEmail ? 'Enviando...' : 'Reenviar boleta'}</span>
                 </button>
               </div>
             </div>

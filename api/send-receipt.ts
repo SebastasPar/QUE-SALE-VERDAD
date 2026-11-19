@@ -23,6 +23,7 @@ interface NormalizedReceiptParams {
   methodDisplayName: string;
   formattedDate: string;
   reference?: string;
+  paymentDetailsSummary?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -35,10 +36,10 @@ function escapeHtml(value: string): string {
 }
 
 function getMethodDisplayName(paymentMethod: string): string {
-  if (paymentMethod === "card") return "Tarjeta Débito / Crédito (Culqi)";
-  if (paymentMethod === "yape") return "Yape (vía Culqi)";
-  if (paymentMethod === "plin") return "Plin (vía Culqi)";
-  return "Culqi / Credicorp";
+  if (paymentMethod === "card") return "Tarjeta Débito / Crédito";
+  if (paymentMethod === "yape") return "Yape";
+  if (paymentMethod === "plin") return "Plin";
+  return "Pago Digital";
 }
 
 function toPdfSafeText(input: string): string {
@@ -126,7 +127,7 @@ export function buildReceiptPdfBuffer(params: NormalizedReceiptParams): Buffer {
   drawText("RUC: 20608945123  |  Lima, Peru", 56, 756, { font: "F1", size: 9.5, color: [0.9, 0.98, 0.98] });
   drawText(
     params.receiptType === "venue"
-      ? "SUSCRIPCION MENSUAL B2B (SIN MONEDAS)"
+      ? "SUSCRIPCION MENSUAL PARA EMPRESAS (S/ 99.00)"
       : "RECARGA DE BILLETERA ANTI NO-SHOW",
     56,
     724,
@@ -181,20 +182,26 @@ export function buildReceiptPdfBuffer(params: NormalizedReceiptParams): Buffer {
     addInfoRow("Cliente:", params.customerName || "Usuario ¿Qué Sale?");
     addInfoRow("Correo Gmail:", params.customerEmail);
     addInfoRow("Fecha de Emision:", params.formattedDate);
-    addInfoRow("Pasarela / Medio:", `Culqi - ${params.methodDisplayName}`);
+    addInfoRow("Metodo de Pago:", params.methodDisplayName);
   }
 
-  // Payment metadata strip for venue (also shows Culqi method)
+  // Payment metadata strip
   let tableTopY = infoBottomY - 24;
   if (params.receiptType === "venue") {
-    drawText(`Pasarela: Culqi / Credicorp  |  Metodo: ${params.methodDisplayName}`, 70, infoBottomY - 14, {
+    const venuePayLine = params.paymentDetailsSummary
+      ? `Metodo de pago: ${params.methodDisplayName}  |  ${params.paymentDetailsSummary}`
+      : `Metodo de pago: ${params.methodDisplayName}`;
+    drawText(venuePayLine, 70, infoBottomY - 14, {
       font: "F1",
       size: 8.5,
       color: [0.39, 0.4, 0.42],
     });
     tableTopY = infoBottomY - 32;
-  } else if (params.reference) {
-    drawText(`Referencia de operacion: ${params.reference}`, 70, infoBottomY - 14, {
+  } else if (params.reference || params.paymentDetailsSummary) {
+    const userPayLine = params.reference
+      ? `Referencia de operacion: ${params.reference}`
+      : `Detalle de pago: ${params.paymentDetailsSummary}`;
+    drawText(userPayLine, 70, infoBottomY - 14, {
       font: "F1",
       size: 8.5,
       color: [0.39, 0.4, 0.42],
@@ -246,14 +253,14 @@ export function buildReceiptPdfBuffer(params: NormalizedReceiptParams): Buffer {
 
   // Security & Legal Footer
   drawLine(56, 118, 539, 118);
-  drawText("Procesado y protegido por Culqi / Credicorp (no se almacenan datos de tarjeta).", 56, 98, {
+  drawText("Pago verificado directamente en ¿Que Sale? (no se almacenan datos sensibles de tarjeta).", 56, 98, {
     font: "F1",
     size: 8.5,
     color: [0.39, 0.4, 0.42],
   });
   drawText(
     params.receiptType === "venue"
-      ? "Comprobante B2B de suscripcion mensual - El sistema de monedas no aplica para locales."
+      ? "Suscripcion mensual comercial: hasta 8 planes/mes, 1 boost de 3h por plan, prioridad 5 km y chat directo."
       : "Comprobante de recarga personal - Representacion impresa emitida por ¿Que Sale? Peru S.A.C.",
     56,
     82,
@@ -302,6 +309,7 @@ function buildUserReceiptHtml(params: NormalizedReceiptParams): string {
   const safeMethod = escapeHtml(params.methodDisplayName);
   const safeDate = escapeHtml(params.formattedDate);
   const safeRef = params.reference ? escapeHtml(params.reference) : "";
+  const safePaySummary = params.paymentDetailsSummary ? escapeHtml(params.paymentDetailsSummary) : "";
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -352,9 +360,17 @@ function buildUserReceiptHtml(params: NormalizedReceiptParams): string {
                   <td align="right" style="font-weight:700;color:#1C1E21;padding:4px 0;">${safeEmail}</td>
                 </tr>
                 <tr>
-                  <td style="color:#65676B;padding:4px 0;">Pasarela / Método:</td>
+                  <td style="color:#65676B;padding:4px 0;">Método de Pago:</td>
                   <td align="right" style="font-weight:700;color:#1C1E21;padding:4px 0;">${safeMethod}</td>
                 </tr>
+                ${
+                  safePaySummary
+                    ? `<tr>
+                  <td style="color:#65676B;padding:4px 0;">Detalle de Pago:</td>
+                  <td align="right" style="font-weight:600;color:#1C1E21;padding:4px 0;">${safePaySummary}</td>
+                </tr>`
+                    : ""
+                }
                 ${
                   safeRef
                     ? `<tr>
@@ -421,7 +437,7 @@ function buildUserReceiptHtml(params: NormalizedReceiptParams): string {
 
           <tr>
             <td style="background-color:#F8FAFC;padding:16px 28px;border-top:1px solid #DDE1E5;font-size:11px;color:#65676B;text-align:center;line-height:1.5;">
-              <div>Procesado y protegido por Culqi / Credicorp (no almacenamos datos de tarjeta)</div>
+              <div>Pago verificado de forma segura en ¿Qué Sale? (no almacenamos datos sensibles de tarjeta)</div>
               <div>¿Qué Sale? Perú S.A.C. • Lima, Perú</div>
             </td>
           </tr>
@@ -438,12 +454,13 @@ function buildVenueReceiptHtml(params: NormalizedReceiptParams): string {
   const safeBusiness = escapeHtml(params.businessName || "Local Aliado");
   const safeRuc = escapeHtml(params.ruc || "20600000001");
   const safeAddress = escapeHtml(params.address || "Lima, Perú");
-  const safePlan = escapeHtml(params.planName || "Plan Sede Única");
+  const safePlan = escapeHtml(params.planName || "Plan Mensual Empresas");
   const safeEmail = escapeHtml(params.customerEmail);
   const safeMethod = escapeHtml(params.methodDisplayName);
   const safeDate = escapeHtml(params.formattedDate);
   const safeRenew = escapeHtml(params.renewsAtFormatted);
   const safeRef = params.reference ? escapeHtml(params.reference) : "";
+  const safePaySummary = params.paymentDetailsSummary ? escapeHtml(params.paymentDetailsSummary) : "";
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -477,7 +494,7 @@ function buildVenueReceiptHtml(params: NormalizedReceiptParams): string {
                 ¡Hola, equipo de <strong>${safeBusiness}</strong>! Confirmamos el pago de tu suscripción mensual en <strong>¿Qué Sale?</strong>.
               </p>
               <div style="background-color:#F0FDFA;border:1px solid #99F6E4;border-radius:12px;padding:12px 16px;font-size:13px;color:#115E59;font-weight:700;">
-                🏢 <strong>Suscripción Mensual Activa:</strong> Publica planes ilimitados para tus <strong>${params.branchesCount} ${params.branchesCount === 1 ? "local" : "locales"}</strong> sin ocupar cupo.
+                🏢 <strong>Suscripción Mensual Activa:</strong> Suscripción mensual comercial: hasta 8 planes/mes, 1 boost de 3h por plan, prioridad 5 km y chat directo.
               </div>
             </td>
           </tr>
@@ -514,9 +531,17 @@ function buildVenueReceiptHtml(params: NormalizedReceiptParams): string {
                   <td align="right" style="font-weight:700;color:#1C1E21;padding:4px 0;">${safeRenew}</td>
                 </tr>
                 <tr>
-                  <td style="color:#65676B;padding:4px 0;">Pasarela / Método:</td>
+                  <td style="color:#65676B;padding:4px 0;">Método de Pago:</td>
                   <td align="right" style="font-weight:700;color:#1C1E21;padding:4px 0;">${safeMethod}</td>
                 </tr>
+                ${
+                  safePaySummary
+                    ? `<tr>
+                  <td style="color:#65676B;padding:4px 0;">Detalle de Pago:</td>
+                  <td align="right" style="font-weight:600;color:#1C1E21;padding:4px 0;">${safePaySummary}</td>
+                </tr>`
+                    : ""
+                }
                 ${
                   safeRef
                     ? `<tr>
@@ -583,8 +608,8 @@ function buildVenueReceiptHtml(params: NormalizedReceiptParams): string {
 
           <tr>
             <td style="background-color:#F8FAFC;padding:16px 28px;border-top:1px solid #DDE1E5;font-size:11px;color:#65676B;text-align:center;line-height:1.5;">
-              <div>Suscripción mensual B2B (el sistema de monedas no aplica para locales aliados).</div>
-              <div>Procesado por Culqi / Credicorp • ¿Qué Sale? Perú S.A.C. (RUC 20608945123)</div>
+              <div>Suscripción mensual comercial: hasta 8 planes/mes, 1 boost de 3h por plan, prioridad 5 km y chat directo.</div>
+              <div>¿Qué Sale? Perú S.A.C. (RUC 20608945123) • Lima, Perú</div>
             </td>
           </tr>
         </table>
@@ -611,6 +636,7 @@ function buildReceiptText(params: NormalizedReceiptParams): string {
       `Locales Cubiertos  : ${params.branchesCount} sedes`,
       `Correo Gmail       : ${params.customerEmail}`,
       `Método de Pago     : ${params.methodDisplayName}`,
+      ...(params.paymentDetailsSummary ? [`Detalle de Pago    : ${params.paymentDetailsSummary}`] : []),
       ...(params.reference ? [`Referencia         : ${params.reference}`] : []),
       "----------------------------------------------------",
       `Suscripción Mensual ${params.planName} (${params.branchesCount} locales)  S/ ${params.totalSoles.toFixed(2)}`,
@@ -620,7 +646,7 @@ function buildReceiptText(params: NormalizedReceiptParams): string {
       `IMPORTE TOTAL                            S/ ${params.totalSoles.toFixed(2)}`,
       "====================================================",
       "Adjunto en PDF: Boleta_" + params.receiptNumber + ".pdf",
-      "Suscripción mensual B2B (sin sistema de monedas).",
+      "Suscripción mensual comercial: hasta 8 planes/mes, 1 boost de 3h por plan, prioridad 5 km y chat directo.",
     ].join("\n");
   }
 
@@ -634,7 +660,7 @@ function buildReceiptText(params: NormalizedReceiptParams): string {
     `Fecha de Emisión : ${params.formattedDate}`,
     `Cliente          : ${params.customerName || params.customerEmail}`,
     `Correo Gmail     : ${params.customerEmail}`,
-    "Pasarela de Pago : Procesado y protegido por Culqi / Credicorp",
+    "Plataforma       : Pago verificado directamente en ¿Qué Sale?",
     `Método de Pago   : ${params.methodDisplayName}`,
     ...(params.reference ? [`Referencia       : ${params.reference}`] : []),
     "----------------------------------------------------",
@@ -668,12 +694,13 @@ export default async function handler(req: any, res: any) {
       businessName = "",
       ruc = "",
       branchesCount = 1,
-      planName = "Plan Sede Única",
+      planName = "Plan Mensual Empresas",
       renewsAt,
       address = "Lima, Perú",
       paymentMethod = "yape",
       issuedAt,
       reference,
+      paymentDetailsSummary,
     } = req.body || {};
 
     const cleanEmail = typeof customerEmail === "string" ? customerEmail.trim() : "";
@@ -685,7 +712,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const finalType: ReceiptType = receiptType === "venue" ? "venue" : "user";
-    const totalNum = Number(totalSoles) || (finalType === "venue" ? 99 : 0);
+    const totalNum = finalType === "venue" ? (Number(totalSoles) || 99) : (Number(totalSoles) || 0);
     const igvNum = Number(igvSoles ?? totalNum * 0.18) || 0;
     const subtotalNum = Number(subtotalSoles ?? totalNum - igvNum) || 0;
     const coinsNum = finalType === "venue" ? 0 : Number(coinsAcquired) || 0;
@@ -709,12 +736,16 @@ export default async function handler(req: any, res: any) {
       businessName: typeof businessName === "string" && businessName.trim() ? businessName.trim() : "Local Aliado",
       ruc: typeof ruc === "string" && ruc.trim() ? ruc.trim() : "20600000001",
       branchesCount: Math.max(1, Number(branchesCount) || 1),
-      planName: typeof planName === "string" && planName.trim() ? planName.trim() : "Plan Sede Única",
+      planName: typeof planName === "string" && planName.trim() ? planName.trim() : "Plan Mensual Empresas",
       renewsAtFormatted,
       address: typeof address === "string" && address.trim() ? address.trim() : "Lima, Perú",
       methodDisplayName,
       formattedDate,
       reference: typeof reference === "string" && reference.trim() ? reference.trim() : undefined,
+      paymentDetailsSummary:
+        typeof paymentDetailsSummary === "string" && paymentDetailsSummary.trim()
+          ? paymentDetailsSummary.trim()
+          : undefined,
     };
 
     const pdfBuffer = buildReceiptPdfBuffer(templateParams);

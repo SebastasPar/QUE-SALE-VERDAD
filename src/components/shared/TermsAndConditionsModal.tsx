@@ -4,12 +4,9 @@ import {
   ShieldCheck, 
   FileText, 
   Coins, 
-  Clock, 
-  HeartHandshake, 
-  AlertTriangle, 
-  Lock, 
   CheckCircle,
-  HelpCircle
+  Building2,
+  AlertTriangle
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -35,6 +32,7 @@ export const TermsAndConditionsModal: React.FC<TermsAndConditionsModalProps> = (
     { id: 'conduct', label: '5. Código de Conducta' },
     { id: 'liability', label: '6. Responsabilidad' },
     { id: 'privacy', label: '7. Privacidad de Datos' },
+    { id: 'business', label: '8. Empresas y Planes' },
   ];
 
   return (
@@ -256,6 +254,56 @@ export const TermsAndConditionsModal: React.FC<TermsAndConditionsModalProps> = (
               <p>
                 No vendemos tus datos a terceras partes. Puedes solicitar la eliminación de tu cuenta y datos en cualquier momento desde los ajustes de tu perfil o contactando a nuestro centro de atención.
               </p>
+            </section>
+          )}
+
+          {/* Section 8: Empresas y Planes */}
+          {(activeSection === 'all' || activeSection === 'business') && (
+            <section className="space-y-3 p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs font-bold">
+                  8
+                </span>
+                <Building2 className="w-4 h-4 text-[#FF5733] dark:text-[#FF6B4A] shrink-0" />
+                <span>Condiciones para Empresas y Clientes Comerciales</span>
+              </h3>
+
+              <p className="text-xs sm:text-sm">
+                Las cuentas comerciales acceden al <strong>Plan Mensual Empresas (S/ 99.00/mes)</strong> con un límite de hasta <strong>8 planes mensuales</strong>, <strong>1 Boost de 3 horas</strong> por plan, <strong>prioridad cercana (5 km a la redonda)</strong> y chat directo con los asistentes. Su uso está sujeto a las siguientes reglas obligatorias:
+              </p>
+
+              <div className="space-y-2.5 text-xs sm:text-sm">
+                <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-amber-200/80 dark:border-amber-800/50">
+                  <p className="font-extrabold text-slate-900 dark:text-white mb-1 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-[#FF5733] shrink-0" />
+                    <span>1. Prohibición de promocionar otras cosas</span>
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Las empresas y clientes comerciales solo pueden publicar planes grupales presenciales reales dentro de la plataforma. Queda estrictamente prohibido utilizar los planes para promocionar otros productos, servicios externos, marcas ajenas, publicidad comercial encubierta o spam.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-rose-200/80 dark:border-rose-800/50">
+                  <p className="font-extrabold text-slate-900 dark:text-white mb-1 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span>2. Sanción por cancelación de plan</span>
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300 mb-1.5">
+                    Si una empresa cancela un plan publicado con asistentes inscritos o con menos de 48 horas de anticipación sin causa de fuerza mayor comprobada:
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 marker:text-rose-500 text-slate-600 dark:text-slate-300">
+                    <li>
+                      Se pierde el cupo dentro del límite mensual de 8 planes y se anula definitivamente el Boost de 3 horas asignado a ese plan.
+                    </li>
+                    <li>
+                      En la primera infracción se aplica una <strong>suspensión de la prioridad cercana (5 km a la redonda) durante 7 días</strong>.
+                    </li>
+                    <li>
+                      En caso de reincidencia se procede a la <strong>anulación definitiva de la suscripción mensual sin derecho a reembolso</strong> (garantizando además el reembolso del 100% de las SaleCoins a los asistentes afectados).
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </section>
           )}
 

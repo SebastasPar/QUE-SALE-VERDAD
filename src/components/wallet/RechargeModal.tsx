@@ -183,7 +183,7 @@ export function RechargeModal({
     igvSoles: Number((selectedPkg.soles * 0.18).toFixed(2)),
     subtotalSoles: Number((selectedPkg.soles * 0.82).toFixed(2)),
     coinsAcquired: selectedPkg.coins,
-    gateway: 'culqi',
+    gateway: 'direct',
     emailStatus: 'sent',
     paymentMethod: selectedMethod,
     issuedAt: new Date().toISOString(),
@@ -191,10 +191,10 @@ export function RechargeModal({
 
   const methodDisplayName =
     activeReceipt.paymentMethod === 'card'
-      ? 'Tarjeta Débito / Crédito (Culqi)'
+      ? 'Tarjeta Débito / Crédito'
       : activeReceipt.paymentMethod === 'yape'
-        ? 'Yape (vía Culqi)'
-        : 'Plin (vía Culqi)';
+        ? 'Yape'
+        : 'Plin';
 
   const handleDownloadReceipt = () => {
     setIsDownloading(true);
@@ -283,7 +283,7 @@ export function RechargeModal({
                 Tienda de SaleCoins
               </h1>
               <p className="text-[11px] text-[#65676B] dark:text-[#9CA3AF] hidden sm:block">
-                Recarga oficial sin comisiones • Culqi
+                Recarga oficial sin comisiones • Pago Seguro
               </p>
             </div>
           </div>
@@ -413,7 +413,7 @@ export function RechargeModal({
               </div>
             </div>
 
-            {/* Payment Method Selector + Culqi / Credicorp Security Branding */}
+            {/* Payment Method Selector + Security Branding */}
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <label className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-[#1C1E21] dark:text-[#F3F4F6] block">
@@ -421,7 +421,7 @@ export function RechargeModal({
                 </label>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/70 text-emerald-800 dark:text-emerald-300 text-xs font-bold w-fit">
                   <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span>Procesado y protegido por Culqi / Credicorp</span>
+                  <span>Pasarela de Pago Segura</span>
                 </div>
               </div>
 
@@ -472,12 +472,12 @@ export function RechargeModal({
                 </button>
               </div>
 
-              {/* Culqi Security Footer Pill under payment methods */}
+              {/* Security Footer Pill under payment methods */}
               <div className="p-3 rounded-2xl bg-white/80 dark:bg-[#1E2025]/80 border border-[#DDE1E5] dark:border-[#2A2D34] flex flex-wrap items-center justify-between gap-2 text-xs text-[#65676B] dark:text-[#9CA3AF]">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
                   <span className="font-semibold text-[#1C1E21] dark:text-[#F3F4F6]">
-                    Procesado y protegido por Culqi / Credicorp
+                    Pago Seguro Encriptado
                   </span>
                 </div>
                 <span className="text-[11px]">
@@ -510,11 +510,11 @@ export function RechargeModal({
         {/* STEP 2: PAYMENT VERIFICATION / CONFIRMATION */}
         {step === 'pay' && (
           <div className="max-w-xl mx-auto space-y-6 pb-12 animate-in fade-in duration-200">
-            {/* Culqi Security Header Badge */}
+            {/* Security Header Badge */}
             <div className="px-4 py-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/70 flex items-center justify-between gap-2 text-xs text-emerald-900 dark:text-emerald-200">
               <div className="flex items-center gap-2 font-bold">
                 <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span>Procesado y protegido por Culqi / Credicorp</span>
+                <span>Pasarela de Pago Segura</span>
               </div>
               <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider">
                 SSL 256-bit
@@ -559,7 +559,7 @@ export function RechargeModal({
                       Transfiere desde tu app de {selectedMethod === 'yape' ? 'Yape' : 'Plin'}
                     </h3>
                     <p className="text-xs text-[#65676B] dark:text-[#9CA3AF]">
-                      Envía exactamente <strong className="text-[#1C1E21] dark:text-[#F3F4F6]">S/ {selectedPkg.soles.toFixed(2)}</strong> al número oficial afiliado a Culqi:
+                      Envía exactamente <strong className="text-[#1C1E21] dark:text-[#F3F4F6]">S/ {selectedPkg.soles.toFixed(2)}</strong> al número oficial de ¿Qué Sale?:
                     </p>
                   </div>
                 </div>
@@ -572,7 +572,7 @@ export function RechargeModal({
                       987 654 321
                     </span>
                     <p className="text-xs font-semibold text-[#65676B] dark:text-[#9CA3AF] mt-0.5">
-                      Titular: ¿Qué Sale? Perú S.A.C. (Culqi QR)
+                      Titular: ¿Qué Sale? Perú S.A.C.
                     </p>
                   </div>
 
@@ -599,7 +599,7 @@ export function RechargeModal({
                     className="w-full px-4 py-3 rounded-2xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] text-sm font-mono placeholder-[#65676B]/60 focus:outline-none focus:ring-2 focus:ring-[#008B8B] dark:focus:ring-[#14B8A6]"
                   />
                   <p className="text-[11px] text-[#65676B] dark:text-[#9CA3AF] mt-1">
-                    Procesado y protegido por Culqi / Credicorp. La boleta electrónica se enviará a <strong>{recipientEmail.trim() || userEmail}</strong>.
+                    Pago Seguro Encriptado. La boleta electrónica se enviará a <strong>{recipientEmail.trim() || userEmail}</strong>.
                   </p>
                 </div>
               </div>
@@ -667,7 +667,7 @@ export function RechargeModal({
 
                 <div className="flex items-center gap-2 text-xs text-[#65676B] dark:text-[#9CA3AF] pt-1">
                   <ShieldCheck className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                  <span>Procesado y protegido por Culqi / Credicorp con cifrado de 256 bits.</span>
+                  <span>Pago Seguro Encriptado con cifrado de 256 bits.</span>
                 </div>
               </div>
             )}
@@ -709,7 +709,7 @@ export function RechargeModal({
                 {isProcessing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Procesando con Culqi...</span>
+                    <span>Procesando pago seguro...</span>
                   </>
                 ) : (
                   <>
@@ -863,11 +863,11 @@ export function RechargeModal({
                   </strong>
                 </div>
 
-                {/* Culqi Security Stamp inside receipt */}
+                {/* Security Stamp inside receipt */}
                 <div className="pt-2 flex items-center justify-between text-[11px] text-[#65676B] dark:text-[#9CA3AF]">
                   <span className="inline-flex items-center gap-1 font-semibold">
                     <ShieldCheck className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6]" />
-                    Procesado y protegido por Culqi / Credicorp
+                    Pago Seguro Encriptado
                   </span>
                   <span className="font-mono uppercase">SUNAT UBL 2.1</span>
                 </div>

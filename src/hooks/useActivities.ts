@@ -7,6 +7,9 @@ import cuevaLechuzasImg from '../assets/images/cueva_lechuzas_1780378395325.png'
 import { useWalletStore } from '../store/walletStore';
 import { useAuthStore } from '../store/authStore';
 
+export const MAX_VENUE_PLANS = 8;
+export const BOOST_DURATION_HOURS = 3;
+
 export interface Activity {
   id: string;
   title: string;
@@ -30,7 +33,17 @@ export interface Activity {
   isCancelled?: boolean;
   discountOffer?: string;
   branchesCount?: number;
+  boostedUntil?: string;
+  hasUsedBoost?: boolean;
 }
+
+export const isActivityBoostActive = (
+  activity: Pick<Activity, 'boostedUntil'>
+): boolean => {
+  if (!activity.boostedUntil) return false;
+  const expiresAt = Date.parse(activity.boostedUntil);
+  return !Number.isNaN(expiresAt) && expiresAt > Date.now();
+};
 
 const DEFAULT_ACTIVITIES: Activity[] = [
   {
@@ -597,6 +610,62 @@ export const cancelActivityApi = async (id: string): Promise<{ success: boolean 
   });
 };
 
+export const activateActivityBoostApi = async (activityId: string): Promise<Activity> => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      const activities = getStorageActivities();
+      const target = activities.find((act) => act.id === activityId);
+
+      if (!target) {
+        reject(new Error('Activity not found'));
+        return;
+      }
+
+      if (target.isCancelled) {
+        reject(new Error('No puedes activar un boost en un plan cancelado.'));
+        return;
+      }
+
+      if (target.hasUsedBoost) {
+        reject(new Error('Este plan ya utilizó su único boost de 3 horas.'));
+        return;
+      }
+
+      const boostedUntil = new Date(
+        Date.now() + BOOST_DURATION_HOURS * 60 * 60 * 1000
+      ).toISOString();
+
+      let updatedActivity: Activity = {
+        ...target,
+        boostedUntil,
+        hasUsedBoost: true,
+      };
+
+      try {
+        const stored = localStorage.getItem('quesale_activities');
+        const catalog: Activity[] = stored ? JSON.parse(stored) : DEFAULT_ACTIVITIES;
+        const nextCatalog = catalog.map((act) => {
+          if (act.id === activityId) {
+            updatedActivity = {
+              ...act,
+              boostedUntil,
+              hasUsedBoost: true,
+            };
+            return updatedActivity;
+          }
+          return act;
+        });
+        saveStorageActivities(nextCatalog);
+      } catch {
+        reject(new Error('No se pudo guardar el boost del plan.'));
+        return;
+      }
+
+      resolve(updatedActivity);
+    }, 300);
+  });
+};
+
 export const useActivities = () => {
   return useQuery({
     queryKey: ['activities'],
@@ -690,6 +759,18 @@ export const useCancelActivity = () => {
       queryClient.invalidateQueries({ queryKey: ['activity', id] });
       queryClient.invalidateQueries({ queryKey: ['activities'] });
       queryClient.invalidateQueries({ queryKey: ['chat', id] });
+    },
+  });
+};
+
+export const useActivateActivityBoost = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (activityId: string) => activateActivityBoostApi(activityId),
+    onSuccess: (_updatedActivity, activityId) => {
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      queryClient.invalidateQueries({ queryKey: ['activity', activityId] });
     },
   });
 };

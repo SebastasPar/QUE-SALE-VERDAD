@@ -7,6 +7,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ImagePlus, Rocket, Building2, AlertTriangle, CheckCircle2, Tag } from 'lucide-react';
 import {
   Activity,
+  MAX_VENUE_PLANS,
+  useActivities,
   getStorageActivities,
   saveStorageActivities,
   getUserJoinedIds,
@@ -32,6 +34,19 @@ export default function CreateActivity() {
   const isVenue = currentUser?.role === 'venue';
   const isVenueSubActive = currentUser?.subscription?.status === 'active';
   const branchesCount = currentUser?.venueDetails?.branchesCount || 1;
+  const { data: activitiesData } = useActivities();
+  const venueSourceActivities = activitiesData ?? getStorageActivities();
+  const activeVenuePlansCount = isVenue
+    ? venueSourceActivities.filter(
+        (act) =>
+          !act.isCancelled &&
+          ((act.creatorId && currentUser?.id && act.creatorId === currentUser.id) ||
+            (currentUser?.id === 'venue-demo-barbarian' &&
+              act.organizerType === 'venue' &&
+              act.organizerName?.toLowerCase().includes('barbarian')))
+      ).length
+    : 0;
+  const hasReachedVenuePlanLimit = isVenue && activeVenuePlansCount >= MAX_VENUE_PLANS;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,7 +111,7 @@ export default function CreateActivity() {
 
   const onSubmit = async (data: ActivityFormValues) => {
     if (isVenue) {
-      if (!isVenueSubActive) {
+      if (!isVenueSubActive || hasReachedVenuePlanLimit) {
         navigate('/venue/dashboard');
         return;
       }
@@ -254,13 +269,39 @@ export default function CreateActivity() {
               </div>
               <div className="text-xs space-y-1">
                 <div className="flex items-center gap-2 flex-wrap font-black text-[#1C1E21] dark:text-[#F3F4F6]">
-                  <span>Publicación de Local Aliado • Cubierto por tu Suscripción Mensual</span>
+                  <span>Incluido en tu Plan Mensual Empresas (S/ 99/mes)</span>
+                  <span className="px-2 py-0.5 rounded-full bg-white/80 dark:bg-[#121316] text-[#008B8B] dark:text-[#14B8A6] text-[10px] font-black">
+                    {activeVenuePlansCount} / {MAX_VENUE_PLANS} planes activos
+                  </span>
                 </div>
                 <p className="text-[#65676B] dark:text-[#9CA3AF] leading-relaxed">
-                  Sin cobro de SaleCoins. Como local organizador, <strong>NO cuentas como integrante ni ocupas un cupo</strong> (inicia en <strong>0 / Capacidad Máx.</strong>). El 100% de los cupos quedará disponible para tus clientes.
+                  Tu suscripción mensual cubre hasta <strong>{MAX_VENUE_PLANS} planes activos</strong>, 1 boost de 3 horas por plan, prioridad cercana (5 km) y chat directo. Tu empresa <strong>no ocupa cupo</strong> en la salida.
                 </p>
               </div>
             </div>
+
+            {hasReachedVenuePlanLimit && (
+              <div className="mb-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <p className="font-black text-amber-900 dark:text-amber-200">
+                      Límite mensual alcanzado ({activeVenuePlansCount}/{MAX_VENUE_PLANS} planes activos)
+                    </p>
+                    <p className="text-amber-800 dark:text-amber-300 mt-0.5">
+                      Tu Plan Mensual Empresas permite un máximo de {MAX_VENUE_PLANS} planes activos. Gestiona tus publicaciones desde el Panel de Empresa.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/venue/dashboard')}
+                  className="px-3 py-1.5 rounded-xl bg-amber-600 text-white text-xs font-black shrink-0 cursor-pointer"
+                >
+                  Ver Panel
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <div className="mb-5 p-3.5 rounded-2xl bg-white dark:bg-[#1E2025] border border-[#DDE1E5] dark:border-[#2A2D34] flex items-start gap-3 shadow-xs">
@@ -514,17 +555,21 @@ export default function CreateActivity() {
           <div className="mt-6 space-y-2">
             <button
               type="submit"
-              disabled={isSubmitting || (isVenue && !isVenueSubActive)}
+              disabled={isSubmitting || (isVenue && (!isVenueSubActive || hasReachedVenuePlanLimit))}
               id="publish-activity-btn"
               className="w-full py-4 rounded-2xl font-black transition-all shadow-lg shadow-[#FF5733]/25 flex justify-center items-center gap-2 bg-[#FF5733] hover:bg-[#E04826] dark:bg-[#FF6B4A] dark:hover:bg-[#FF5733] text-white disabled:opacity-70 disabled:cursor-not-allowed text-base active:scale-[0.99] cursor-pointer"
             >
               {isSubmitting ? (
                 'Publicando...'
               ) : isVenue ? (
-                <>
-                  <Rocket className="w-5 h-5" />
-                  <span>Publicar Plan del Local (Suscripción Activa)</span>
-                </>
+                hasReachedVenuePlanLimit ? (
+                  <span>Límite alcanzado ({activeVenuePlansCount}/{MAX_VENUE_PLANS} planes)</span>
+                ) : (
+                  <>
+                    <Rocket className="w-5 h-5" />
+                    <span>Publicar Plan ({activeVenuePlansCount}/{MAX_VENUE_PLANS})</span>
+                  </>
+                )
               ) : (
                 <>
                   <Rocket className="w-5 h-5" />
@@ -536,11 +581,11 @@ export default function CreateActivity() {
             {isVenue ? (
               <div className="flex items-center justify-between px-1 text-xs text-[#65676B] dark:text-[#9CA3AF]">
                 <span>
-                  Plan: <strong className="text-[#1C1E21] dark:text-[#F3F4F6]">{currentUser?.subscription?.planName || 'Suscripción Mensual'}</strong>
+                  Plan: <strong className="text-[#1C1E21] dark:text-[#F3F4F6]">Plan Mensual Empresas (S/ 99/mes)</strong>
                 </span>
                 <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  Sin cobro de monedas
+                  Incluido en suscripción
                 </span>
               </div>
             ) : (

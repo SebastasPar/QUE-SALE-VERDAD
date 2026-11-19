@@ -1,12 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { useActivities, useJoinActivity, Activity } from '../hooks/useActivities';
+import { useActivities, useJoinActivity, isActivityBoostActive, Activity } from '../hooks/useActivities';
 import { ActivityCard, ActivityCardSkeleton } from '../components/shared/activity-card';
-import { Search, SlidersHorizontal, X, RotateCcw, MapPin, Building2, User, Moon, Sun, Navigation } from 'lucide-react';
+import { Search, SlidersHorizontal, X, RotateCcw, Navigation } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BottomNav } from '../components/shared/bottom-nav';
 import { useAuthStore } from '../store/authStore';
-import { useThemeStore } from '../store/themeStore';
 import { 
   AdvancedFiltersModal, 
   AdvancedFilterState, 
@@ -38,7 +37,6 @@ function ErrorFallback({ error, resetErrorBoundary }: any) {
 export default function Feed() {
   const { user: currentUser } = useAuthStore();
   const { canAfford } = useWalletStore();
-  const { isDarkMode, toggleDarkMode } = useThemeStore();
   const { isGeolocationEnabled, coordinates } = useLocationStore();
   const { data: activities, isLoading, refetch } = useActivities();
   const { mutate: joinActivity } = useJoinActivity();
@@ -181,20 +179,60 @@ export default function Feed() {
     return true;
   };
 
+  const getActivityDistance = (act: Activity) => {
+    if (
+      isGeolocationEnabled &&
+      coordinates &&
+      act.latitude !== undefined &&
+      act.longitude !== undefined
+    ) {
+      return calculateDistanceKm(
+        coordinates.latitude,
+        coordinates.longitude,
+        act.latitude,
+        act.longitude
+      );
+    }
+    return act.distanceKm ?? 999;
+  };
+
   const filteredActivities = useMemo(() => {
     const list = activities?.filter(filterActivity) || [];
-    if (isGeolocationEnabled && coordinates) {
-      return [...list].sort((a, b) => {
-        const distA = a.latitude !== undefined && a.longitude !== undefined
-          ? calculateDistanceKm(coordinates.latitude, coordinates.longitude, a.latitude, a.longitude)
-          : (a.distanceKm ?? 999);
-        const distB = b.latitude !== undefined && b.longitude !== undefined
-          ? calculateDistanceKm(coordinates.latitude, coordinates.longitude, b.latitude, b.longitude)
-          : (b.distanceKm ?? 999);
+    return [...list].sort((a, b) => {
+      const boostA = isActivityBoostActive(a);
+      const boostB = isActivityBoostActive(b);
+      const distA = getActivityDistance(a);
+      const distB = getActivityDistance(b);
+
+      // 1. Planes con Boost activo (3 horas) tienen prioridad máxima
+      if (boostA !== boostB) {
+        return boostA ? -1 : 1;
+      }
+
+      // 2. Entre planes con Boost activo, priorizar los de cercanía <= 5 km y menor distancia
+      if (boostA && boostB) {
+        const within5A = distA <= 5;
+        const within5B = distB <= 5;
+        if (within5A !== within5B) {
+          return within5A ? -1 : 1;
+        }
         return distA - distB;
-      });
-    }
-    return list;
+      }
+
+      // 3. Si GPS está habilitado, ordenar por distancia
+      if (isGeolocationEnabled && coordinates) {
+        return distA - distB;
+      }
+
+      // 4. Prioridad cercana (5 km) para planes de empresas dentro del radio de 5 km
+      const nearbyVenueA = a.organizerType === 'venue' && distA <= 5;
+      const nearbyVenueB = b.organizerType === 'venue' && distB <= 5;
+      if (nearbyVenueA !== nearbyVenueB) {
+        return nearbyVenueA ? -1 : 1;
+      }
+
+      return 0;
+    });
   }, [activities, search, activeCategory, advancedFilters, isGeolocationEnabled, coordinates]);
 
   // Count active advanced filters
@@ -223,17 +261,6 @@ export default function Feed() {
               ¿Qué Sale?
             </h1>
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Theme toggle switch (Light/Dark Mode) */}
-              <button
-                type="button"
-                onClick={toggleDarkMode}
-                className="p-2 rounded-xl text-[#65676B] dark:text-[#9CA3AF] hover:text-[#008B8B] dark:hover:text-[#14B8A6] hover:bg-[#EFEFF1] dark:hover:bg-[#121316] transition-colors cursor-pointer"
-                title={isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-                aria-label="Alternar tema claro/oscuro"
-              >
-                {isDarkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
-              </button>
-
               <NotificationBell />
               <SaleCoinsBadge />
               <div 

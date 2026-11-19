@@ -17,16 +17,70 @@ export interface VenueDetails {
   discountOffer?: string;
 }
 
+export interface SubscriptionPaymentDetails {
+  payerPhone?: string;
+  approvalCode?: string;
+  cardHolder?: string;
+  cardLast4?: string;
+  cardExpiry?: string;
+}
+
 export interface VenueSubscription {
   status: 'active' | 'past_due' | 'canceled';
-  planId: 'single' | 'multi' | 'chain';
+  planId: 'single';
   planName: string;
   monthlyPricePen: number;
   activatedAt: string;
   renewsAt: string;
   receiptNumber?: string;
   paymentMethod?: 'yape' | 'plin' | 'card';
+  paymentDetails?: SubscriptionPaymentDetails;
+  maxPlansPerMonth?: number;
+  boostDurationHours?: number;
+  priorityRadiusKm?: number;
 }
+
+const DEFAULT_VENUE_PLAN_NAME = 'Plan Mensual Empresas';
+const DEFAULT_VENUE_PRICE_PEN = 99;
+const DEFAULT_MAX_PLANS_PER_MONTH = 8;
+const DEFAULT_BOOST_DURATION_HOURS = 3;
+const DEFAULT_PRIORITY_RADIUS_KM = 5;
+
+const resolvePlanName = (incoming?: string, fallback?: string): string => {
+  const candidate = (incoming || fallback || '').trim();
+  if (!candidate || candidate === 'Plan Multisede' || candidate === 'Plan Sede Única') {
+    return DEFAULT_VENUE_PLAN_NAME;
+  }
+  return candidate;
+};
+
+const normalizeVenueSubscription = (
+  subscription?: Partial<VenueSubscription>,
+  fallback?: VenueSubscription
+): VenueSubscription => {
+  const nowIso = new Date().toISOString();
+  const defaultRenewsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const mergedPaymentDetails =
+    subscription?.paymentDetails !== undefined
+      ? { ...(fallback?.paymentDetails || {}), ...subscription.paymentDetails }
+      : fallback?.paymentDetails;
+
+  return {
+    status: subscription?.status || fallback?.status || 'active',
+    planId: 'single',
+    planName: resolvePlanName(subscription?.planName, fallback?.planName),
+    monthlyPricePen: DEFAULT_VENUE_PRICE_PEN,
+    activatedAt: subscription?.activatedAt || fallback?.activatedAt || nowIso,
+    renewsAt: subscription?.renewsAt || fallback?.renewsAt || defaultRenewsAt,
+    receiptNumber: subscription?.receiptNumber ?? fallback?.receiptNumber,
+    paymentMethod: subscription?.paymentMethod ?? fallback?.paymentMethod,
+    paymentDetails: mergedPaymentDetails,
+    maxPlansPerMonth: DEFAULT_MAX_PLANS_PER_MONTH,
+    boostDurationHours: DEFAULT_BOOST_DURATION_HOURS,
+    priorityRadiusKm: DEFAULT_PRIORITY_RADIUS_KM,
+  };
+};
 
 export interface User {
   id: string;
@@ -54,6 +108,7 @@ interface AuthState {
   setProfileDetails: (details: { avatarUrl?: string; bio?: string }) => void;
   updateProfile: (details: Partial<User>) => void;
   updateSubscription: (subscription: Partial<VenueSubscription>) => void;
+  cancelSubscription: () => void;
   updateVenueDetails: (details: Partial<VenueDetails>) => void;
   completeOnboarding: () => void;
 }
@@ -128,7 +183,10 @@ export const useAuthStore = create<AuthState>()(
               ? (user.venueDetails || storedProfile?.venueDetails || state.user?.venueDetails)
               : undefined,
             subscription: finalRole === 'venue'
-              ? (user.subscription || storedProfile?.subscription || state.user?.subscription)
+              ? (() => {
+                  const rawSub = user.subscription || storedProfile?.subscription || state.user?.subscription;
+                  return rawSub ? normalizeVenueSubscription(rawSub) : undefined;
+                })()
               : undefined,
           };
 
@@ -178,17 +236,24 @@ export const useAuthStore = create<AuthState>()(
       updateSubscription: (subscription) =>
         set((state) => {
           if (!state.user) return { user: null };
-          const currentSub: VenueSubscription = state.user.subscription || {
-            status: 'active',
-            planId: (state.user.venueDetails?.branchesCount || 1) > 1 ? 'multi' : 'single',
-            planName: (state.user.venueDetails?.branchesCount || 1) > 1 ? 'Plan Multisede' : 'Plan Sede Única',
-            monthlyPricePen: (state.user.venueDetails?.branchesCount || 1) > 1 ? 179 : 99,
-            activatedAt: new Date().toISOString(),
-            renewsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          };
+          const nextSub = normalizeVenueSubscription(subscription, state.user.subscription);
           const nextUser: User = {
             ...state.user,
-            subscription: { ...currentSub, ...subscription },
+            subscription: nextSub,
+          };
+          saveAccountToDirectory(nextUser);
+          return { user: nextUser };
+        }),
+      cancelSubscription: () =>
+        set((state) => {
+          if (!state.user) return { user: null };
+          const nextSub = normalizeVenueSubscription(
+            { status: 'canceled' },
+            state.user.subscription
+          );
+          const nextUser: User = {
+            ...state.user,
+            subscription: nextSub,
           };
           saveAccountToDirectory(nextUser);
           return { user: nextUser };
@@ -216,6 +281,15 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'quesale_auth_storage',
+      onRehydrateStorage: () => (state) => {
+        if (state?.user?.role === 'venue' && state.user.subscription) {
+          state.user = {
+            ...state.user,
+            subscription: normalizeVenueSubscription(state.user.subscription),
+          };
+          saveAccountToDirectory(state.user);
+        }
+      },
     }
   )
 );

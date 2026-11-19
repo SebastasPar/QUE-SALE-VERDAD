@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAuthStore } from '../../store/authStore';
+import { isActivityBoostActive } from '../../hooks/useActivities';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -23,6 +24,8 @@ interface ActivityCardProps {
   distanceKm?: number;
   price?: number;
   priceType?: 'free' | 'paid';
+  boostedUntil?: string;
+  hasUsedBoost?: boolean;
   onJoinClick?: (e: React.MouseEvent, id: string) => void;
 }
 
@@ -89,13 +92,13 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
   organizerType = 'user',
   organizerName,
   distanceKm,
-  price = 0,
-  priceType = 'free',
+  boostedUntil,
   onJoinClick
 }) => {
   const navigate = useNavigate();
   const isVenue = useAuthStore((state) => state.user?.role === 'venue');
   const [imageError, setImageError] = React.useState(false);
+  const isBoosted = isActivityBoostActive({ boostedUntil });
 
   const getCategoryIcon = (cat: string) => {
     switch (cat.toLowerCase()) {
@@ -163,7 +166,12 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
   return (
     <div 
       onClick={() => navigate(`/activity/${id}`)}
-      className="w-full group flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-[#1E2025] shadow-xs border border-[#DDE1E5] dark:border-[#2A2D34] transition-all hover:shadow-md hover:border-[#008B8B]/40 dark:hover:border-[#14B8A6]/40 cursor-pointer"
+      className={cn(
+        "w-full group flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-[#1E2025] shadow-xs border transition-all hover:shadow-md cursor-pointer",
+        isBoosted
+          ? "border-amber-400/90 dark:border-amber-500/80 ring-1 ring-amber-400/30 hover:border-amber-500"
+          : "border-[#DDE1E5] dark:border-[#2A2D34] hover:border-[#008B8B]/40 dark:hover:border-[#14B8A6]/40"
+      )}
     >
       <div className="relative h-48 w-full bg-[#EFEFF1] dark:bg-[#121316] overflow-hidden">
         {imageUrl && !imageError ? (
@@ -180,8 +188,15 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
             <span className="text-xs font-semibold tracking-wider uppercase opacity-85">{category}</span>
           </div>
         )}
-        <div className="absolute top-3 left-3 px-3 py-1 bg-white/95 dark:bg-[#1E2025]/95 backdrop-blur-sm text-[#1C1E21] dark:text-[#F3F4F6] text-xs font-black tracking-wider rounded-lg uppercase shadow-xs border border-[#DDE1E5] dark:border-[#2A2D34]">
-          {category}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap max-w-[65%]">
+          <div className="px-3 py-1 bg-white/95 dark:bg-[#1E2025]/95 backdrop-blur-sm text-[#1C1E21] dark:text-[#F3F4F6] text-xs font-black tracking-wider rounded-lg uppercase shadow-xs border border-[#DDE1E5] dark:border-[#2A2D34]">
+            {category}
+          </div>
+          {isBoosted && (
+            <span className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-[#FF5733] text-white text-[11px] font-black rounded-lg shadow-sm flex items-center gap-1">
+              ⚡ Destacado
+            </span>
+          )}
         </div>
         
         {/* Organizer Type Badge */}

@@ -7,7 +7,7 @@ export interface PaymentReceipt {
   igvSoles: number; // 18% IGV
   subtotalSoles: number; // 82% Base imponible
   coinsAcquired: number;
-  gateway: 'culqi';
+  gateway?: 'direct' | 'culqi';
   emailStatus: 'sent' | 'simulated' | 'failed';
   paymentMethod: 'yape' | 'plin' | 'card';
   issuedAt: string;
@@ -24,7 +24,7 @@ export interface WalletTransaction {
   activityId?: string;
   paymentMethod?: 'yape' | 'plin' | 'card';
   solesAmount?: number;
-  gateway?: 'culqi';
+  gateway?: 'direct' | 'culqi';
   receipt?: PaymentReceipt;
 }
 
@@ -54,7 +54,7 @@ const getStoredUserInfo = (): { id: string | null; email: string } => {
   return { id: null, email: 'santiago.lima@quesale.pe' };
 };
 
-export const generateCulqiReceipt = (params: {
+export const generateReceipt = (params: {
   totalSoles: number;
   coinsAcquired: number;
   paymentMethod: 'yape' | 'plin' | 'card';
@@ -80,12 +80,15 @@ export const generateCulqiReceipt = (params: {
     igvSoles,
     subtotalSoles,
     coinsAcquired: params.coinsAcquired,
-    gateway: 'culqi',
+    gateway: 'direct',
     emailStatus: 'sent',
     paymentMethod: params.paymentMethod,
     issuedAt: new Date().toISOString(),
   };
 };
+
+// Alias de compatibilidad para módulos que aún importan el nombre anterior
+export const generateCulqiReceipt = generateReceipt;
 
 interface WalletState {
   currentUserId: string | null;
@@ -105,6 +108,13 @@ interface WalletState {
     reference?: string,
     customerEmail?: string
   ) => PaymentReceipt;
+  processPayment: (params: {
+    totalSoles: number;
+    coinsAcquired: number;
+    method: 'yape' | 'plin' | 'card';
+    customerEmail?: string;
+    reference?: string;
+  }) => PaymentReceipt;
   processCulqiPayment: (params: {
     totalSoles: number;
     coinsAcquired: number;
@@ -118,7 +128,20 @@ interface WalletState {
 }
 
 const getWalletStorageKey = (userId: string | null) => {
-  return userId ? `quesale_wallet_${userId}` : 'quesale_wallet_guest';
+  return userId ? `quesale_wallet_v2_${userId}` : 'quesale_wallet_v2_guest';
+};
+
+const cleanupLegacyWalletStorage = () => {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('quesale_wallet_') && !key.startsWith('quesale_wallet_v2_')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch {}
 };
 
 export const loadUserWalletData = (
@@ -163,12 +186,10 @@ const saveUserWalletData = (
   } catch {}
 };
 
+cleanupLegacyWalletStorage();
+
 const initialUser = getStoredUserInfo();
 const initialData = loadUserWalletData(initialUser.id);
-
-try {
-  localStorage.removeItem('quesale_wallet_storage');
-} catch {}
 
 export const useWalletStore = create<WalletState>()((set, get) => ({
   currentUserId: initialUser.id,
@@ -239,7 +260,7 @@ export const useWalletStore = create<WalletState>()((set, get) => ({
       card: 'Tarjeta Débito/Crédito',
     };
 
-    const receipt = generateCulqiReceipt({
+    const receipt = generateReceipt({
       totalSoles: soles,
       coinsAcquired: coins,
       paymentMethod: method,
@@ -250,13 +271,13 @@ export const useWalletStore = create<WalletState>()((set, get) => ({
       id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       type: 'credit',
       amount: coins,
-      title: `Recarga Culqi exitosa (+${coins} SaleCoins)`,
-      description: `Boleta ${receipt.receiptNumber} • S/ ${soles.toFixed(2)} (IGV S/ ${receipt.igvSoles.toFixed(2)}) vía ${methodNames[method]} (Culqi)${reference ? ` • Ref: ${reference}` : ''} • Enviada a ${receipt.customerEmail}`,
+      title: `Recarga exitosa (+${coins} SaleCoins)`,
+      description: `Boleta ${receipt.receiptNumber} • S/ ${soles.toFixed(2)} (IGV S/ ${receipt.igvSoles.toFixed(2)}) vía ${methodNames[method]}${reference ? ` • Ref: ${reference}` : ''} • Enviada a ${receipt.customerEmail}`,
       date: receipt.issuedAt,
       category: 'recharge',
       paymentMethod: method,
       solesAmount: soles,
-      gateway: 'culqi',
+      gateway: 'direct',
       receipt,
     };
 
@@ -274,6 +295,10 @@ export const useWalletStore = create<WalletState>()((set, get) => ({
     });
 
     return receipt;
+  },
+
+  processPayment: ({ totalSoles, coinsAcquired, method, customerEmail, reference }) => {
+    return get().rechargeCoins(totalSoles, coinsAcquired, method, reference, customerEmail);
   },
 
   processCulqiPayment: ({ totalSoles, coinsAcquired, method, customerEmail, reference }) => {

@@ -16,6 +16,7 @@ export interface SendReceiptPayload {
   paymentMethod: 'yape' | 'plin' | 'card';
   issuedAt: string;
   reference?: string;
+  paymentDetailsSummary?: string;
 }
 
 export interface SendReceiptResponse {
@@ -73,7 +74,7 @@ function buildClientFallbackPdfBytes(payload: SendReceiptPayload): Uint8Array {
   text(`BOLETA ELECTRONICA  -  SERIE: ${payload.receiptNumber}`, 54, 750, true, 12, '1 1 1');
   text(
     payload.receiptType === 'venue'
-      ? 'SUSCRIPCION MENSUAL B2B (SIN MONEDAS)'
+      ? 'SUSCRIPCION MENSUAL PARA EMPRESAS (S/ 99.00)'
       : 'RECARGA DE BILLETERA ANTI NO-SHOW',
     54,
     728,
@@ -92,7 +93,7 @@ function buildClientFallbackPdfBytes(payload: SendReceiptPayload): Uint8Array {
     y -= 18;
     text(`Fecha Emision: ${issuedDate}`, 54, y, false, 10);
     y -= 28;
-    text(`Concepto: Suscripcion Mensual ${payload.planName || 'Plan Sede Unica'} (${payload.branchesCount || 1} sedes)`, 54, y, true, 10);
+    text(`Concepto: Suscripcion Mensual ${payload.planName || 'Plan Mensual Empresas'} (${payload.branchesCount || 1} sedes)`, 54, y, true, 10);
   } else {
     text(`Cliente: ${payload.customerName || payload.customerEmail}`, 54, y, true, 10);
     y -= 18;
@@ -103,8 +104,21 @@ function buildClientFallbackPdfBytes(payload: SendReceiptPayload): Uint8Array {
     text(`Concepto: Paquete de +${payload.coinsAcquired || 0} SaleCoins (Billetera Anti No-Show)`, 54, y, true, 10);
   }
 
+  const paymentMethodLabel =
+    payload.paymentMethod === 'yape'
+      ? 'YAPE'
+      : payload.paymentMethod === 'plin'
+        ? 'PLIN'
+        : payload.paymentMethod === 'card'
+          ? 'TARJETA DEBITO / CREDITO'
+          : String(payload.paymentMethod || 'PAGO DIGITAL').toUpperCase();
+
   y -= 24;
-  text(`Metodo de pago: ${payload.paymentMethod.toUpperCase()} (Culqi / Credicorp)`, 54, y, false, 10);
+  text(`Metodo de pago: ${paymentMethodLabel}`, 54, y, false, 10);
+  if (payload.paymentDetailsSummary) {
+    y -= 16;
+    text(`Detalle de pago: ${payload.paymentDetailsSummary}`, 54, y, false, 9);
+  }
   y -= 26;
   text(`Op. Gravada (82%): S/ ${subtotal.toFixed(2)}`, 54, y, false, 10);
   y -= 18;

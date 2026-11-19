@@ -15,11 +15,7 @@ import {
   MessageCircle,
   Building2,
   User,
-  Store,
-  CreditCard,
-  Smartphone,
   Receipt,
-  Check,
   MapPin,
   Phone,
   FileText,
@@ -27,6 +23,17 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { TermsAndConditionsModal } from '../components/shared/TermsAndConditionsModal';
+import {
+  VenueMonthlyPlanCard,
+  VenuePaymentMethodFields,
+  VenueBusinessTermsBox,
+  VenuePaymentMethod,
+  VenuePaymentFormState,
+  createInitialVenuePaymentForm,
+  validateVenuePaymentForm,
+  toSubscriptionPaymentDetails,
+  formatPaymentDetailsSummary,
+} from '../components/shared/VenueSubscriptionUI';
 import { setUserJoinedIds } from '../hooks/useActivities';
 import { sendReceiptEmailWithPdf } from '../utils/receiptPdf';
 
@@ -75,8 +82,12 @@ export default function Register() {
 
   // Venue flow state
   const [venueDraft, setVenueDraft] = useState<VenueRegisterFormValues | null>(null);
-  const [selectedPlanId, setSelectedPlanId] = useState<'single' | 'multi'>('single');
-  const [paymentMethod, setPaymentMethod] = useState<'yape' | 'plin' | 'card'>('yape');
+  const [paymentMethod, setPaymentMethod] = useState<VenuePaymentMethod>('yape');
+  const [paymentForm, setPaymentForm] = useState<VenuePaymentFormState>(() =>
+    createInitialVenuePaymentForm()
+  );
+  const [acceptedBusinessTerms, setAcceptedBusinessTerms] = useState(false);
+  const [venueFormTermsError, setVenueFormTermsError] = useState<string | null>(null);
   const [venueReceiptEmail, setVenueReceiptEmail] = useState<string>('');
   const [subPaymentError, setSubPaymentError] = useState<string | null>(null);
   const [isActivatingSub, setIsActivatingSub] = useState(false);
@@ -139,8 +150,14 @@ export default function Register() {
   };
 
   const onSubmitVenueDetails = (data: VenueRegisterFormValues) => {
+    if (!acceptedBusinessTerms) {
+      setVenueFormTermsError(
+        'Debes aceptar los Términos y Condiciones para Empresas antes de continuar.'
+      );
+      return;
+    }
+    setVenueFormTermsError(null);
     setVenueDraft(data);
-    setSelectedPlanId(data.branchesCount > 1 ? 'multi' : 'single');
     setVenueReceiptEmail(data.email.trim());
     setSubPaymentError(null);
     setStep('venue-subscription');
@@ -148,9 +165,23 @@ export default function Register() {
 
   const handleActivateVenueSubscription = async () => {
     if (!venueDraft) return;
+
+    if (!acceptedBusinessTerms) {
+      setSubPaymentError(
+        'Debes aceptar los Términos y Condiciones para Empresas antes de activar la suscripción.'
+      );
+      return;
+    }
+
+    const paymentValidationError = validateVenuePaymentForm(paymentMethod, paymentForm);
+    if (paymentValidationError) {
+      setSubPaymentError(paymentValidationError);
+      return;
+    }
+
     const targetEmail = (venueReceiptEmail || venueDraft.email).trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
-      setSubPaymentError('Ingresa un correo Gmail / electrónico válido para enviarte la boleta en PDF.');
+      setSubPaymentError('Ingresa un correo electrónico válido para enviarte la confirmación de pago y boleta en PDF.');
       return;
     }
 
@@ -161,9 +192,10 @@ export default function Register() {
     const now = new Date();
     const renews = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const receiptNumber = `B001-${String(Math.floor(100000 + Math.random() * 899999))}`;
-    const isMulti = selectedPlanId === 'multi';
-    const monthlyPricePen = isMulti ? 179 : 99;
-    const planName = isMulti ? 'Plan Multisede' : 'Plan Sede Única';
+    const monthlyPricePen = 99;
+    const planName = 'Plan Mensual Empresas';
+    const paymentDetails = toSubscriptionPaymentDetails(paymentMethod, paymentForm);
+    const paymentDetailsSummary = formatPaymentDetailsSummary(paymentMethod, paymentForm);
     const newVenueId = `venue-${Date.now()}`;
 
     await sendReceiptEmailWithPdf({
@@ -179,6 +211,7 @@ export default function Register() {
       renewsAt: renews.toISOString(),
       address: venueDraft.address.trim(),
       paymentMethod,
+      paymentDetailsSummary,
       issuedAt: now.toISOString(),
     });
 
@@ -203,13 +236,17 @@ export default function Register() {
         },
         subscription: {
           status: 'active',
-          planId: selectedPlanId,
+          planId: 'single',
           planName,
           monthlyPricePen,
           activatedAt: now.toISOString(),
           renewsAt: renews.toISOString(),
           receiptNumber,
           paymentMethod,
+          paymentDetails,
+          maxPlansPerMonth: 8,
+          boostDurationHours: 3,
+          priorityRadiusKm: 5,
         },
       },
       true
@@ -301,17 +338,17 @@ export default function Register() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
                       <span className="px-2.5 py-0.5 rounded-full bg-[#FF5733]/15 dark:bg-[#FF6B4A]/20 text-[#FF5733] dark:text-[#FF6B4A] text-[11px] font-black">
-                        🏢 Cuenta Comercial B2B
+                        🏢 Para Empresas y Negocios
                       </span>
                       <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 text-[11px] font-black">
-                        ✨ Suscripción Mensual
+                        ✨ Suscripción Mensual S/ 99
                       </span>
                     </div>
                     <h2 className="text-base sm:text-lg font-black text-[#1C1E21] dark:text-[#F3F4F6] group-hover:text-[#FF5733] dark:group-hover:text-[#FF6B4A] transition-colors">
-                      Tengo un Local o Negocio
+                      Tengo un Local o Empresa
                     </h2>
                     <p className="mt-1 text-xs sm:text-sm text-[#65676B] dark:text-[#9CA3AF] leading-relaxed">
-                      Publica experiencias y planes grupales en tus sedes para atraer grupos verificados sin usar monedas ni ocupar cupos.
+                      Publica tus planes grupales para conectar con nuevos asistentes cerca de tu ubicación y coordina directamente con el grupo.
                     </p>
                     <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-black text-[#FF5733] dark:text-[#FF6B4A]">
                       <span>Registrar mi Local</span>
@@ -730,13 +767,18 @@ export default function Register() {
               </div>
             </div>
 
-            <div className="mb-6 p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 shrink-0">
-                <Store className="w-4 h-4" />
+            <div className="mb-6 p-4 rounded-2xl bg-[#008B8B]/10 dark:bg-[#14B8A6]/15 border border-[#008B8B]/25 dark:border-[#14B8A6]/30 flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-[#008B8B]/15 text-[#008B8B] dark:text-[#14B8A6] shrink-0">
+                <Building2 className="w-4 h-4" />
               </div>
-              <p className="text-xs text-[#1C1E21] dark:text-[#F3F4F6] leading-relaxed">
-                <strong>Sin SaleCoins para Locales:</strong> Tu negocio funciona mediante <strong>Suscripción Mensual</strong>. Al publicar planes, tu local <strong>no ocupa cupos</strong> ni figura como asistente.
-              </p>
+              <div className="text-xs text-[#1C1E21] dark:text-[#F3F4F6] leading-relaxed">
+                <strong className="block mb-0.5 text-[#008B8B] dark:text-[#14B8A6]">
+                  🏢 Suscripción Mensual para Empresas
+                </strong>
+                <span>
+                  Publica tus planes grupales para conectar con nuevos asistentes cerca de tu ubicación y coordina directamente con el grupo.
+                </span>
+              </div>
             </div>
 
             <form className="space-y-4" onSubmit={handleVenueSubmit(onSubmitVenueDetails)}>
@@ -910,6 +952,23 @@ export default function Register() {
                 )}
               </div>
 
+              <VenueBusinessTermsBox
+                accepted={acceptedBusinessTerms}
+                onToggleAccepted={(next) => {
+                  setAcceptedBusinessTerms(next);
+                  if (next) setVenueFormTermsError(null);
+                }}
+                onOpenFullTerms={() => setIsTermsOpen(true)}
+                checkboxId="venue-form-accept-terms"
+              />
+
+              {venueFormTermsError && (
+                <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{venueFormTermsError}</span>
+                </p>
+              )}
+
               <div className="pt-2">
                 <button
                   type="submit"
@@ -959,120 +1018,51 @@ export default function Register() {
               </p>
             </div>
 
-            {/* Monetization explanation */}
+            {/* Short explanation without SaleCoins */}
             <div className="mb-5 p-4 rounded-2xl bg-[#008B8B]/10 dark:bg-[#14B8A6]/15 border border-[#008B8B]/25 dark:border-[#14B8A6]/30 text-xs text-[#1C1E21] dark:text-[#F3F4F6] leading-relaxed">
               <strong className="text-[#008B8B] dark:text-[#14B8A6] block mb-1">
-                🏢 Modelo B2B sin SaleCoins
+                🏢 Suscripción Mensual para Empresas
               </strong>
-              El sistema de monedas no aplica a los locales. Con tu suscripción mensual puedes crear y publicar planes grupales ilimitados, sin pagar por evento y sin ocupar cupos de los asistentes.
+              Publica tus planes grupales para conectar con nuevos asistentes cerca de tu ubicación y coordina directamente con el grupo.
             </div>
 
-            {/* Plan cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-6">
-              <button
-                type="button"
-                onClick={() => setSelectedPlanId('single')}
-                className={`text-left p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                  selectedPlanId === 'single'
-                    ? 'border-[#008B8B] dark:border-[#14B8A6] bg-[#008B8B]/5 dark:bg-[#14B8A6]/10 shadow-sm'
-                    : 'border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316]'
-                }`}
-              >
-                {venueDraft.branchesCount === 1 && (
-                  <span className="inline-block px-2 py-0.5 rounded-full bg-[#008B8B] text-white text-[10px] font-black uppercase mb-2">
-                    Recomendado para 1 local
-                  </span>
-                )}
-                <h3 className="text-sm font-black text-[#1C1E21] dark:text-[#F3F4F6]">Plan Sede Única</h3>
-                <p className="text-2xl font-black text-[#008B8B] dark:text-[#14B8A6] mt-1">
-                  S/ 99 <span className="text-xs font-semibold text-[#65676B] dark:text-[#9CA3AF]">/ mes</span>
-                </p>
-                <ul className="mt-3 space-y-1.5 text-[11px] text-[#65676B] dark:text-[#9CA3AF]">
-                  <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Planes ilimitados en 1 sede</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Insignia 🏢 Local Oficial</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Chat directo con asistentes</li>
-                </ul>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedPlanId('multi')}
-                className={`text-left p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                  selectedPlanId === 'multi'
-                    ? 'border-[#FF5733] dark:border-[#FF6B4A] bg-[#FF5733]/5 dark:bg-[#FF6B4A]/10 shadow-sm'
-                    : 'border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316]'
-                }`}
-              >
-                {venueDraft.branchesCount > 1 && (
-                  <span className="inline-block px-2 py-0.5 rounded-full bg-[#FF5733] text-white text-[10px] font-black uppercase mb-2">
-                    Recomendado ({venueDraft.branchesCount} sedes)
-                  </span>
-                )}
-                <h3 className="text-sm font-black text-[#1C1E21] dark:text-[#F3F4F6]">Plan Multisede</h3>
-                <p className="text-2xl font-black text-[#FF5733] dark:text-[#FF6B4A] mt-1">
-                  S/ 179 <span className="text-xs font-semibold text-[#65676B] dark:text-[#9CA3AF]">/ mes</span>
-                </p>
-                <ul className="mt-3 space-y-1.5 text-[11px] text-[#65676B] dark:text-[#9CA3AF]">
-                  <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Gestión de múltiples locales</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Prioridad geográfica en Feed</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Promos grupales destacadas</li>
-                </ul>
-              </button>
-            </div>
-
-            {/* Culqi Payment Method */}
+            {/* Single Monthly Plan S/ 99 */}
             <div className="mb-5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-2">
-                Método de Pago Mensual (Culqi)
-              </label>
-              <div className="grid grid-cols-3 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('yape')}
-                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 text-left transition-all cursor-pointer ${
-                    paymentMethod === 'yape'
-                      ? 'border-[#008B8B] bg-[#008B8B]/10 text-[#1C1E21] dark:text-white'
-                      : 'border-[#DDE1E5] dark:border-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF]'
-                  }`}
-                >
-                  <Smartphone className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                  <p className="text-xs font-black">Yape</p>
-                  <p className="text-[10px] opacity-80">Instantáneo</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('plin')}
-                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 text-left transition-all cursor-pointer ${
-                    paymentMethod === 'plin'
-                      ? 'border-[#008B8B] bg-[#008B8B]/10 text-[#1C1E21] dark:text-white'
-                      : 'border-[#DDE1E5] dark:border-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF]'
-                  }`}
-                >
-                  <Smartphone className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                  <p className="text-xs font-black">Plin</p>
-                  <p className="text-[10px] opacity-80">QR / Móvil</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('card')}
-                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 text-left transition-all cursor-pointer ${
-                    paymentMethod === 'card'
-                      ? 'border-[#008B8B] bg-[#008B8B]/10 text-[#1C1E21] dark:text-white'
-                      : 'border-[#DDE1E5] dark:border-[#2A2D34] text-[#65676B] dark:text-[#9CA3AF]'
-                  }`}
-                >
-                  <CreditCard className="w-4 h-4 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                  <p className="text-xs font-black">Tarjeta</p>
-                  <p className="text-[10px] opacity-80">Débito / Créd.</p>
-                </button>
-              </div>
+              <VenueMonthlyPlanCard />
             </div>
 
-            {/* Gmail destination for PDF receipt */}
+            {/* Payment Method + How to pay & payment fields BEFORE email */}
+            <div className="mb-5">
+              <VenuePaymentMethodFields
+                paymentMethod={paymentMethod}
+                onChangeMethod={setPaymentMethod}
+                form={paymentForm}
+                onChangeForm={setPaymentForm}
+                onClearError={() => {
+                  if (subPaymentError) setSubPaymentError(null);
+                }}
+                label="Método de Pago Mensual"
+              />
+            </div>
+
+            {/* Business Terms Confirmation */}
+            <div className="mb-5">
+              <VenueBusinessTermsBox
+                accepted={acceptedBusinessTerms}
+                onToggleAccepted={(next) => {
+                  setAcceptedBusinessTerms(next);
+                  if (next && subPaymentError) setSubPaymentError(null);
+                }}
+                onOpenFullTerms={() => setIsTermsOpen(true)}
+                checkboxId="venue-sub-accept-terms"
+              />
+            </div>
+
+            {/* Email for payment confirmation & PDF receipt (AFTER payment details) */}
             <div className="mb-6">
               <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1.5 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6]" />
-                <span>Correo Gmail para recibir Boleta en PDF</span>
+                <span>Correo electrónico para recibir confirmación de pago y boleta</span>
               </label>
               <input
                 type="email"
@@ -1081,7 +1071,7 @@ export default function Register() {
                   setVenueReceiptEmail(e.target.value);
                   if (subPaymentError) setSubPaymentError(null);
                 }}
-                placeholder="tulocal@gmail.com"
+                placeholder="tuempresa@correo.com"
                 className="block w-full rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] px-3.5 py-2.5 text-sm text-[#1C1E21] dark:text-[#F3F4F6] focus:border-[#008B8B] focus:outline-none focus:ring-2 focus:ring-[#008B8B]/20"
               />
               {subPaymentError && (
@@ -1092,7 +1082,7 @@ export default function Register() {
               )}
               <p className="mt-2 text-[11px] text-[#65676B] dark:text-[#9CA3AF] flex items-center gap-1.5">
                 <Receipt className="w-3.5 h-3.5 text-[#008B8B] dark:text-[#14B8A6] shrink-0" />
-                <span>Enviaremos automáticamente tu Boleta en PDF (Serie B001 • RUC 20608945123) a este Gmail.</span>
+                <span>Enviaremos automáticamente tu Boleta en PDF (Serie B001 • RUC 20608945123) a este correo.</span>
               </p>
             </div>
 
@@ -1110,9 +1100,7 @@ export default function Register() {
                 </>
               ) : (
                 <>
-                  <span>
-                    Activar Suscripción (S/ {selectedPlanId === 'multi' ? '179.00' : '99.00'}/mes)
-                  </span>
+                  <span>Pagar S/ 99.00 y Activar Suscripción</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

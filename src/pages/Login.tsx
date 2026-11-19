@@ -40,7 +40,7 @@ export default function Login() {
     if (effectiveRole === 'venue') {
       const now = new Date();
       const renews = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-      const emailPrefix = data.email.split('@')[0] || 'Local Aliado';
+      const emailPrefix = data.email.split('@')[0] || 'Empresa Aliada';
       const fallbackVenueName =
         emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1).replace(/[._-]/g, ' ');
 
@@ -54,7 +54,7 @@ export default function Login() {
           avatarUrl: existingStored?.avatarUrl || '',
           bio:
             existingStored?.bio ||
-            'Local aliado en ¿Qué Sale? Creando experiencias grupales presenciales para la comunidad.',
+            'Empresa aliada en ¿Qué Sale? Creando experiencias grupales presenciales para la comunidad.',
           venueDetails: existingStored?.venueDetails || {
             businessName: fallbackVenueName,
             ruc: '20608945123',
@@ -66,12 +66,15 @@ export default function Login() {
           subscription: existingStored?.subscription || {
             status: 'active',
             planId: 'single',
-            planName: 'Plan Sede Única',
+            planName: 'Plan Mensual Empresas',
             monthlyPricePen: 99,
             activatedAt: now.toISOString(),
             renewsAt: renews.toISOString(),
             receiptNumber: 'B001-004821',
             paymentMethod: 'yape',
+            maxPlansPerMonth: 8,
+            boostDurationHours: 3,
+            priorityRadiusKm: 5,
           },
         },
         true
@@ -102,43 +105,6 @@ export default function Login() {
     navigate('/feed', { replace: true });
   };
 
-  const handleDemoVenueLogin = () => {
-    const now = new Date();
-    const renews = new Date(now.getTime() + 25 * 24 * 60 * 60 * 1000);
-    login(
-      'venue-demo-token-123',
-      {
-        id: 'venue-demo-barbarian',
-        name: 'Barbarian Bar & Cervecería',
-        email: 'aliados@barbarian.pe',
-        role: 'venue',
-        avatarUrl:
-          'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=300&q=80',
-        bio: 'Cervecería artesanal peruana con catas guiadas, maridajes y noches temáticas para grupos en Lima.',
-        venueDetails: {
-          businessName: 'Barbarian Bar & Cervecería',
-          ruc: '20554321987',
-          venueCategory: 'Bar / Restobar',
-          branchesCount: 3,
-          address: 'Calle Manuel Bonilla 108, Miraflores',
-          phone: '987654321',
-        },
-        subscription: {
-          status: 'active',
-          planId: 'multi',
-          planName: 'Plan Multisede',
-          monthlyPricePen: 179,
-          activatedAt: now.toISOString(),
-          renewsAt: renews.toISOString(),
-          receiptNumber: 'B001-009214',
-          paymentMethod: 'card',
-        },
-      },
-      true
-    );
-    navigate('/venue/dashboard', { replace: true });
-  };
-
   return (
     <div className="min-h-screen bg-[#EFEFF1] dark:bg-[#121316] text-[#1C1E21] dark:text-[#F3F4F6] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 transition-colors">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
@@ -153,14 +119,14 @@ export default function Login() {
         </h2>
         <p className="mt-1 text-sm text-[#65676B] dark:text-[#9CA3AF]">
           {selectedRole === 'venue'
-            ? 'Accede al panel comercial de tu local para crear y publicar planes'
+            ? 'Accede al panel comercial de tu empresa para crear y publicar planes'
             : 'Bienvenido de vuelta a tu comunidad de planes'}
         </p>
       </div>
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white dark:bg-[#1E2025] py-7 px-5 shadow-xs border border-[#DDE1E5] dark:border-[#2A2D34] rounded-3xl sm:px-10">
-          {/* Role Segmented Control (Persona vs Local) */}
+          {/* Role Segmented Control (Persona vs Empresa) */}
           <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-[#EFEFF1] dark:bg-[#121316] border border-[#DDE1E5] dark:border-[#2A2D34] mb-6">
             <button
               type="button"
@@ -186,20 +152,20 @@ export default function Login() {
               }`}
             >
               <Building2 className="w-3.5 h-3.5" />
-              <span>Soy Local</span>
+              <span>Soy Empresa</span>
             </button>
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-[#65676B] dark:text-[#9CA3AF] mb-1">
-                {selectedRole === 'venue' ? 'Correo Corporativo del Local' : 'Email'}
+                {selectedRole === 'venue' ? 'Correo Corporativo de la Empresa' : 'Email'}
               </label>
               <div className="mt-1">
                 <input
                   {...register('email')}
                   type="email"
-                  placeholder={selectedRole === 'venue' ? 'contacto@tulocal.pe' : 'tu@correo.com'}
+                  placeholder={selectedRole === 'venue' ? 'contacto@tuempresa.pe' : 'tu@correo.com'}
                   className="block w-full appearance-none rounded-xl border border-[#DDE1E5] dark:border-[#2A2D34] bg-white dark:bg-[#121316] px-3.5 py-2.5 placeholder-[#65676B]/60 dark:placeholder-[#9CA3AF]/60 shadow-2xs focus:border-[#008B8B] dark:focus:border-[#14B8A6] focus:outline-none focus:ring-2 focus:ring-[#008B8B]/20 sm:text-sm text-[#1C1E21] dark:text-[#F3F4F6] transition-all"
                 />
                 {errors.email && <p className="mt-1.5 text-xs text-red-500">{errors.email.message}</p>}
@@ -232,54 +198,11 @@ export default function Login() {
                 {isSubmitting
                   ? 'Ingresando...'
                   : selectedRole === 'venue'
-                  ? 'Ingresar al Panel del Local'
+                  ? 'Ingresar al Panel de Empresa'
                   : 'Iniciar Sesión'}
               </button>
             </div>
           </form>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div className="w-full border-t border-[#DDE1E5] dark:border-[#2A2D34]" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white dark:bg-[#1E2025] px-2 text-[#65676B] dark:text-[#9CA3AF] font-bold tracking-wider">
-                O accede rápido
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                login(
-                  'fake-token-123',
-                  {
-                    id: 'guest-fair',
-                    name: 'Visitante',
-                    email: 'visitante@feriaplanes.com',
-                    role: 'user',
-                  },
-                  true
-                );
-                navigate('/feed');
-              }}
-              className="flex w-full justify-center items-center gap-2 rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50/70 dark:bg-amber-950/40 hover:bg-amber-100/70 py-2.5 px-4 text-sm font-extrabold text-amber-800 dark:text-amber-300 transition-all active:scale-[0.99] cursor-pointer"
-            >
-              Probar como Persona (Modo Feria) 🎪✨
-            </button>
-
-            <button
-              type="button"
-              id="demo-venue-login-btn"
-              onClick={handleDemoVenueLogin}
-              className="flex w-full justify-center items-center gap-2 rounded-2xl border border-[#008B8B]/40 dark:border-[#14B8A6]/40 bg-[#008B8B]/10 dark:bg-[#14B8A6]/15 hover:bg-[#008B8B]/20 py-2.5 px-4 text-sm font-extrabold text-[#008B8B] dark:text-[#14B8A6] transition-all active:scale-[0.99] cursor-pointer"
-            >
-              <Building2 className="w-4 h-4 shrink-0" />
-              <span>Probar como Local Aliado (Demo Negocio) 🏢</span>
-            </button>
-          </div>
 
           <div className="mt-6 text-center text-sm">
             <span className="text-[#65676B] dark:text-[#9CA3AF]">¿No tienes cuenta? </span>
