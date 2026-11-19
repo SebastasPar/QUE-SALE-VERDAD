@@ -23,6 +23,7 @@ import {
   X
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { BrandLogo } from '../components/shared/BrandLogo';
 
 interface InterestItem {
   id: string;
@@ -183,14 +184,7 @@ export default function Onboarding() {
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           
           {/* Brand Logo & Name */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#008B8B] dark:bg-[#14B8A6] text-white dark:text-[#121316] flex items-center justify-center font-black text-xs shadow-xs">
-              ¿?
-            </div>
-            <span className="text-xl font-black text-[#008B8B] dark:text-[#14B8A6] tracking-tight">
-              ¿Qué Sale?
-            </span>
-          </div>
+          <BrandLogo size="sm" />
 
           {/* Stepper Header */}
           <div className="flex items-center gap-3">

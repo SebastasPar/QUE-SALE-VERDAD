@@ -6,6 +6,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Building2, User } from 'lucide-react';
 import { useAuthStore, UserRole, getStoredAccountByEmail } from '../store/authStore';
 import { TermsAndConditionsModal } from '../components/shared/TermsAndConditionsModal';
+import { BrandLogo } from '../components/shared/BrandLogo';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -110,9 +111,9 @@ export default function Login() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <Link
           to="/"
-          className="inline-block text-3xl font-black text-[#008B8B] dark:text-[#14B8A6] tracking-tight hover:opacity-90"
+          className="inline-flex items-center justify-center hover:opacity-90 transition-opacity"
         >
-          ¿Qué Sale?
+          <BrandLogo size="md" />
         </Link>
         <h2 className="mt-4 text-center text-3xl font-black tracking-tight text-[#1C1E21] dark:text-[#F3F4F6]">
           Inicia sesión

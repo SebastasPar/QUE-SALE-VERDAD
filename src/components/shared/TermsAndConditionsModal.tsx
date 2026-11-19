@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { 
   X, 
   ShieldCheck, 
-  FileText, 
   Coins, 
   CheckCircle,
   Building2,
   AlertTriangle
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { BrandMark } from './BrandLogo';
 
 interface TermsAndConditionsModalProps {
   isOpen: boolean;
@@ -49,9 +49,7 @@ export const TermsAndConditionsModal: React.FC<TermsAndConditionsModalProps> = (
         {/* Sticky Header */}
         <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#619c77]/15 dark:bg-[#619c77]/30 text-[#619c77] dark:text-[#7fbaa2] flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5" />
-            </div>
+            <BrandMark size={40} />
             <div>
               <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-tight">
                 Términos y Condiciones de Uso

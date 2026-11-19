@@ -325,6 +325,16 @@ function buildUserReceiptHtml(params: NormalizedReceiptParams): string {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#FFFFFF;border-radius:20px;border:1px solid #DDE1E5;overflow:hidden;">
           <tr>
             <td style="background-color:#008B8B;padding:24px 28px;color:#FFFFFF;">
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom:10px;">
+                <tr>
+                  <td style="width:28px;height:28px;border-radius:8px;border:1.5px solid rgba(255,255,255,0.45);background-color:rgba(255,255,255,0.12);text-align:center;vertical-align:middle;font-weight:900;font-style:italic;font-size:13px;color:#FFFFFF;">
+                    ¿?
+                  </td>
+                  <td style="padding-left:8px;font-size:16px;font-weight:900;letter-spacing:-0.3px;color:#FFFFFF;">
+                    ¿Qué Sale?
+                  </td>
+                </tr>
+              </table>
               <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;opacity:0.9;">
                 ¿QUÉ SALE? PERÚ S.A.C. • RUC 20608945123
               </div>
@@ -476,6 +486,16 @@ function buildVenueReceiptHtml(params: NormalizedReceiptParams): string {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#FFFFFF;border-radius:20px;border:1px solid #DDE1E5;overflow:hidden;">
           <tr>
             <td style="background-color:#008B8B;padding:24px 28px;color:#FFFFFF;">
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom:10px;">
+                <tr>
+                  <td style="width:28px;height:28px;border-radius:8px;border:1.5px solid rgba(255,255,255,0.45);background-color:rgba(255,255,255,0.12);text-align:center;vertical-align:middle;font-weight:900;font-style:italic;font-size:13px;color:#FFFFFF;">
+                    ¿?
+                  </td>
+                  <td style="padding-left:8px;font-size:16px;font-weight:900;letter-spacing:-0.3px;color:#FFFFFF;">
+                    ¿Qué Sale?
+                  </td>
+                </tr>
+              </table>
               <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;opacity:0.9;">
                 ¿QUÉ SALE? PERÚ S.A.C. • CUENTA COMERCIAL B2B
               </div>

@@ -23,6 +23,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { TermsAndConditionsModal } from '../components/shared/TermsAndConditionsModal';
+import { BrandLogo } from '../components/shared/BrandLogo';
 import {
   VenueMonthlyPlanCard,
   VenuePaymentMethodFields,
@@ -262,12 +263,9 @@ export default function Register() {
       <div className="sm:mx-auto sm:w-full sm:max-w-xl flex flex-col items-center text-center mb-6">
         <Link
           to="/"
-          className="group inline-flex items-center gap-2.5 text-3xl font-black tracking-tight text-[#008B8B] dark:text-[#14B8A6] hover:opacity-95 transition-all"
+          className="group inline-flex items-center hover:opacity-95 transition-all"
         >
-          <div className="w-10 h-10 rounded-xl bg-[#008B8B] dark:bg-[#14B8A6] text-white dark:text-[#121316] flex items-center justify-center shadow-sm text-base font-black group-hover:scale-105 transition-transform">
-            ¿?
-          </div>
-          <span className="text-[#008B8B] dark:text-[#14B8A6]">¿Qué Sale?</span>
+          <BrandLogo size="md" />
         </Link>
 
         <div className="mt-3.5 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#008B8B]/10 dark:bg-[#14B8A6]/20 border border-[#008B8B]/20 dark:border-[#14B8A6]/30 text-[#008B8B] dark:text-[#14B8A6] text-xs font-bold shadow-2xs">

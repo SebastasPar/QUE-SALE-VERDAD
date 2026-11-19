@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, KeyRound } from 'lucide-react';
 import { TermsAndConditionsModal } from '../components/shared/TermsAndConditionsModal';
+import { BrandLogo } from '../components/shared/BrandLogo';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -12,15 +13,13 @@ export default function Landing() {
       <div aria-hidden="true" className="h-2" />
 
       <div className="w-full max-w-sm mx-auto flex flex-col items-center text-center my-auto">
-        {/* Logo Badge */}
-        <div className="w-16 h-16 rounded-3xl bg-[#008B8B]/10 dark:bg-[#14B8A6]/20 border border-[#008B8B]/30 dark:border-[#14B8A6]/30 flex items-center justify-center text-3xl mb-4 shadow-sm">
-          ✨
-        </div>
-
-        {/* Title */}
-        <h1 className="text-4xl sm:text-5xl font-black text-[#1C1E21] dark:text-[#F3F4F6] tracking-tight mb-3">
-          ¿Qué Sale?
-        </h1>
+        {/* Official Brand Logo */}
+        <BrandLogo
+          layout="stacked"
+          size="xl"
+          wordmarkAs="h1"
+          className="mb-3.5"
+        />
 
         {/* Subtitle */}
         <p className="text-base sm:text-lg leading-relaxed text-[#65676B] dark:text-[#9CA3AF] font-medium px-2 mb-8">

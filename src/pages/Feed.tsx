@@ -16,6 +16,7 @@ import { useLocationStore, calculateDistanceKm } from '../store/locationStore';
 import { SaleCoinsBadge } from '../components/wallet/SaleCoinsBadge';
 import { RechargeModal } from '../components/wallet/RechargeModal';
 import { NotificationBell } from '../components/notifications/NotificationBell';
+import { BrandLogo } from '../components/shared/BrandLogo';
 
 const CATEGORIES = ['Recomendados', 'Deportes', 'Cultura', 'Gastronomía', 'Bienestar'];
 
@@ -254,12 +255,14 @@ export default function Feed() {
       <header className="w-full sticky top-0 z-20 bg-white/95 dark:bg-[#1E2025]/95 backdrop-blur-md border-b border-[#DDE1E5] dark:border-[#2A2D34] px-4 py-3 shadow-2xs">
         <div className="w-full max-w-3xl mx-auto">
           <div className="flex justify-between items-center gap-2 mb-2.5">
-            <h1 className="shrink-0 text-lg sm:text-xl font-black text-[#1C1E21] dark:text-[#F3F4F6] tracking-tight flex items-center gap-2">
-              <span className="w-8 h-8 rounded-xl bg-[#008B8B]/10 dark:bg-[#14B8A6]/20 flex items-center justify-center text-[#008B8B] dark:text-[#14B8A6] font-bold text-base shadow-2xs shrink-0">
-                ✨
-              </span>
-              ¿Qué Sale?
-            </h1>
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="shrink-0 flex items-center cursor-pointer focus:outline-none"
+              aria-label="¿Qué Sale? Inicio"
+            >
+              <BrandLogo size="sm" wordmarkAs="h1" />
+            </button>
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <NotificationBell />
               <SaleCoinsBadge />
